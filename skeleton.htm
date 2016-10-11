@@ -1,0 +1,130 @@
+<meta charset="UTF-8">
+<html>
+  <head>
+    <title>TITLE</title>
+    <script src='http://cdn.mathjax.org/mathjax/latest/MathJax.js' type='text/javascript'>
+        MathJax.Hub.Config({
+            HTML: ["input/TeX","output/HTML-CSS"],
+            TeX: { extensions: ["AMSmath.js","AMSsymbols.js"],
+                   equationNumbers: { autoNumber: "AMS" } },
+            extensions: ["tex2jax.js"],
+            jax: ["input/TeX","output/HTML-CSS"],
+            tex2jax: { inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+                       displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+                       processEscapes: true },
+            "HTML-CSS": { availableFonts: ["TeX"],
+                          linebreaks: { automatic: true } }
+        });
+    </script>
+    <style type="text/css">
+        html, body {       /* for full-height background */
+            font: 14pt/22pt serif;
+            height: 100%;
+            margin: 0;
+            margin-bottom: 3em;
+            padding: 0;
+        }
+        #content {
+            max-width: 40em;
+            margin: auto;
+            text-align: justify;
+        }
+        div.figure {
+            border: 1px solid black;
+            padding: 1em;
+        }
+
+        div.caption {
+            margin: 1em;
+        }
+        div.caption span.title {
+            font-weight: bold;
+        }
+        div.caption span.title:after {
+            content: ':';
+        }
+
+        div.thm span.title:after {
+            content: ':'
+        }
+        div.thm span.title {
+            font-weight: bold;
+        }
+
+        div.lem span.title:after {
+            content: ':'
+        }
+        div.lem span.title {
+            font-weight: bold;
+        }
+
+        div.exc span.title:after {
+            content: ':'
+        }
+        div.exc span.title {
+            font-weight: bold;
+        }
+
+        div.proof span.title:after {
+            content: ':'
+        }
+        div.proof span.title {
+            font-style: italic;
+        }
+        div.proof:after {
+            content: "    ∎";
+            text-align: right;
+        }
+        div.chapter {
+            font-size: 200%;
+            font-weight: bold;
+            font-family: sans;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        h1 {
+            font-size: 120%;
+            font-weight: bold;
+            font-family: sans;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        h2 {
+            font-size: 100%;
+            font-weight: bold;
+            font-family: sans;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        h3 {
+            font-size: 100%;
+            font-weight: bold;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        div.center {
+            text-align: center;
+        }
+
+        div.codeimport {
+            border: 2px solid red;
+            padding: 1em;
+            text-align:center;
+            font-family: monospace;
+            font-size: 80%;
+        }
+    </style>
+    <script
+      src="http://hyphenator.googlecode.com/svn/tags/Version%204.0.0/Hyphenator.js">
+    </script>
+  </head>
+  <body lang="en" class="hyphenate">
+    <div id="content">
+      \(\newcommand{\E}{\mathrm{E}}
+       \DeclareMathOperator{\ddiv}{div}
+      \)
+      CONTENT
+    </div>
+  </body>
+  <script>Hyphenator.run();</script>
+</html>
