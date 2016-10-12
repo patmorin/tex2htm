@@ -9,12 +9,13 @@ from collections import defaultdict
 
 # TODO: Split paragraphs
 # TODO: Import code
-
+# TODO: Use concatenable lists instead of Python list
 
 # Some global variables
 environment_handlers = defaultdict(lambda: process_env_default)
 command_handlers = defaultdict(lambda: process_cmd_default)
 
+# Environments that are theorem-like or that have captions should be here
 named_entities = {'chap': 'Chapter',
                   'sec': 'Section',
                   'thm': 'Theorem',
@@ -24,6 +25,8 @@ named_entities = {'chap': 'Chapter',
                   'eq': 'Equation',
                   'exc': 'Exercise',
                   'proof': 'Proof'}
+
+theoremlike_environments = {'thm', 'lem', 'exc', 'proof'}
 
 # Map LaTeX labels on to HTML id's
 label_map = dict()
@@ -91,8 +94,14 @@ def strip_comments(tex):
 
 #
 # Label and Refeference Handling
-# TODO: Add numbers to environments and sections
+# TODO: This is super-hacky
+#
 def process_labels(tex):
+    """ Process all the labels that occur in tex
+
+        This works by scanning for commands and environments that alter
+        numbering as well as any LaTeX labelling commands.
+    """
     headings = ['chapter'] + ['sub'*i + 'section' for i in range(4)]
     reh = r'(' + '|'.join(headings) + r'){(.+?)}'
     environments = ['thm', 'lem', 'exc', 'figure', 'equation']
@@ -130,6 +139,7 @@ def process_labels(tex):
         elif m.group(5):
             # This is an environment (thm, lem, ...)
             name = m.group(5)
+            lastenv = name # save this for a caption command coming later...
             i = environments.index(name)
             env_ctr[i] += 1
             number = "{}.{}".format(sec_ctr[0], env_ctr[i])
@@ -137,9 +147,10 @@ def process_labels(tex):
             lastlabel = idd
             blocks.append("<a id='{}'></a>".format(idd))
 
-            nicename = named_entities[name]
-            title = '{}&nbsp;{}'.format(nicename, number)
-            blocks.append(r'\begin{{{}}}[{}]'.format(name, title))
+            if name in theoremlike_environments:
+                nicename = named_entities[name]
+                title = '{}&nbsp;{}'.format(nicename, number)
+                blocks.append(r'\begin{{{}}}[{}]'.format(name, title))
 
         elif m.group(7):
             # This is a labelling command (\thmlabel, \seclabel,...)
@@ -148,13 +159,14 @@ def process_labels(tex):
 
         elif m.group(9):
             # This is a caption command
-            name = 'figure'
+            name = lastenv
             i = environments.index(name)
             number = "{}.{}".format(sec_ctr[0], env_ctr[i])
             idd = "{}:{}".format(name, number)
             lastlabel = idd
 
-            title = '<span class="title">Figure&nbsp;{}</span>'.format(number)
+            nicename = named_entities[name]
+            title = '<span class="title">{}&nbsp;{}</span>'.format(nicename, number)
             text = '{}&emsp;{}'.format(title, cmd.args[0])
             blocks.append(r'\caption{{{}}}'.format(text))
 
@@ -383,8 +395,7 @@ def setup_environment_handlers():
     lists = ['itemize', 'enumerate', 'list']
     for name in lists:
         environment_handlers[name] = process_list_env
-    thmlike = ['thm', 'lem', 'exc', 'proof']
-    for name in thmlike:
+    for name in theoremlike_environments:
         environment_handlers[name] = process_theoremlike_env
 
 def get_environment(tex, begincmd):
