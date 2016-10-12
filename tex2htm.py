@@ -7,11 +7,11 @@ import re
 from collections import defaultdict
 
 
-# TODO: Split paragraphs
 # TODO: Import code
 # TODO: Use concatenable lists instead of Python list
+# TODO: Bibliographies
 
-# Some global variables
+# Some global variables - TODO: Wrap these into a class
 environment_handlers = defaultdict(lambda: process_env_default)
 command_handlers = defaultdict(lambda: process_cmd_default)
 
@@ -35,6 +35,14 @@ label_map = dict()
 undefined_labels = set()
 unprocessed_commands = set()
 unprocessed_environments = set()
+
+# Used for processing footnotes
+footnote_counter = 0
+footnotes = list()
+
+# Document title
+title = 'Untitled'
+
 
 # Math mode
 MATH = 1
@@ -64,7 +72,6 @@ def match_parens(tex, i, open, close):
         abort("Couldn't match parenthesis:\n... "
               + tex[max(0,i-25):min(len(tex,i+25))])
 
-
 #
 # Preprocessing functions
 #
@@ -91,10 +98,20 @@ def strip_comments(tex):
     lines = [lines[i] for i in range(len(lines)) if i not in nulled]
     return "\n".join(lines)
 
+def split_paragraphs(tex):
+    # TODO: Do this better
+    lines = [line.strip() for line in tex.splitlines()]
+    out=''
+    for i in range(len(lines)-1):
+        if lines[i] == '' and lines[i+1] != '':
+            lines[i] += '<p>'
+    return "\n".join(lines)
 
 #
 # Label and Refeference Handling
-# TODO: This is super-hacky
+# TODO: The insertion of numbers into theorem-like, sectioning commands,
+#       and captions is super hacky. Consider using JavaScript to do this,
+#       like here: https://github.com/rauschma/html_demos
 #
 def process_labels(tex):
     """ Process all the labels that occur in tex
@@ -176,7 +193,6 @@ def process_labels(tex):
 
 #
 # LaTeX commands
-# TODO: Handle footnotes correctly
 class command(object):
     def __init__(self, name, optargs, args, start, end):
         self.name = name
@@ -231,6 +247,7 @@ def setup_command_handlers():
     command_handlers['javaimport'] =  process_codeimport_cmd
     command_handlers['cite'] =  lambda t, c, m: ['[{}]'.format(c.args[0])]
     command_handlers['ldots'] =  process_dots_cmd
+    command_handlers['footnote'] = process_footnote_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -294,6 +311,8 @@ def process_dots_cmd(tex, cmd, mode):
     return [ '?' ]
 
 def process_chapter_cmd(text, cmd, mode):
+    global title
+    title = cmd.args[0]
     blocks = list()
     blocks.append('<div class="chapter">')
     blocks.extend(process_recursively(cmd.args[0], mode))
@@ -343,6 +362,15 @@ def process_codeimport_cmd(tex, cmd, mode):
     blocks = ['<div class="codeimport">']
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</div><!-- codeimport -->")
+    return blocks
+
+def process_footnote_cmd(tex, cmd, mode):
+    global footnote_counter
+    blocks = list()
+    footnote_counter += 1
+    blocks.append('<a class="ptr">({})</a>'.format(footnote_counter))
+    fntext = ''.join(process_recursively(cmd.args[0], mode))
+    footnotes.append('<li>{}</li>'.format(fntext))
     return blocks
 
 def process_ref_cmd(tex, cmd, mode):
@@ -526,6 +554,7 @@ def tex2htm(tex):
     # Some preprocessing
     tex = preprocess_hashes(tex)
     tex = strip_comments(tex)
+    tex = split_paragraphs(tex)
     tex = re.sub(r'\\\[', r'\\begin{equation*}', tex)
     tex = re.sub(r'\\\]', r'\end{equation*}', tex)
     tex = re.sub(r'\$([^\$]*(\\\$)?)\$', r'\\begin{dollar}\1\\end{dollar}', tex,
@@ -536,8 +565,6 @@ def tex2htm(tex):
     tex = re.sub('#([^#]*)#', r'\\begin{hash}\1\end{hash}', tex, 0, re.M|re.S)
 
     tex = process_labels(tex)
-    for label in label_map:
-        print("{}=>#{}".format(label, label_map[label]))
 
     blocks = process_recursively(tex, 0)
 
@@ -560,8 +587,6 @@ if __name__ == "__main__":
     # Read and translate the input
     tex = open(filename).read()
     htm = tex2htm(tex)
-    # TODO: Extract title
-    chapter = "None"
 
     # Print warnings
     if undefined_labels:
@@ -578,7 +603,9 @@ if __name__ == "__main__":
     basedir = os.path.dirname(sys.argv[0])
     filename = basedir + os.path.sep + 'skeleton.htm'
     (head, tail) = re.split('CONTENT', open(filename).read())
-    head = re.sub('TITLE', chapter, head)
+    head = re.sub('TITLE', title, head)
+    tail = re.sub('FOOTNOTES', ''.join(footnotes), tail)
+
 
     # Write everything
     of = open(outfile, 'w')
