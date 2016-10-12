@@ -43,6 +43,8 @@ footnotes = list()
 # Document title
 title = 'Untitled'
 
+# Table of contents
+toc = list()
 
 # Math mode
 MATH = 1
@@ -106,6 +108,17 @@ def split_paragraphs(tex):
         if lines[i] == '' and lines[i+1] != '':
             lines[i] += '<p>'
     return "\n".join(lines)
+
+def add_toc_entry(txt, id):
+    toc.append('<li><a href="#{}">{}</a></li>'.format(id, txt))
+
+id_counter = 0
+def gen_unique_id(prefix=''):
+    global id_counter
+    id_counter += 1
+    if not prefix:
+        prefix = 'tex2htm'
+    return '{}-{}'.format(prefix, id_counter)
 
 #
 # Label and Refeference Handling
@@ -315,13 +328,17 @@ def process_chapter_cmd(text, cmd, mode):
     title = cmd.args[0]
     blocks = list()
     blocks.append('<div class="chapter">')
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    htmlblocks = process_recursively(cmd.args[0], mode)
+    blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
 
 def process_section_cmd(text, cmd, mode):
-    blocks = ["<h1>"]
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    ident = gen_unique_id()
+    blocks = ['<h1 id="{}">'.format(ident)]
+    htmlblocks = process_recursively(cmd.args[0], mode)
+    blocks.extend(htmlblocks)
+    add_toc_entry(''.join(htmlblocks), ident)
     blocks.append("</h1>")
     return blocks
 
@@ -604,6 +621,8 @@ if __name__ == "__main__":
     filename = basedir + os.path.sep + 'skeleton.htm'
     (head, tail) = re.split('CONTENT', open(filename).read())
     head = re.sub('TITLE', title, head)
+    head = re.sub('TOC', ''.join(toc), head)
+
     tail = re.sub('FOOTNOTES', ''.join(footnotes), tail)
 
 
