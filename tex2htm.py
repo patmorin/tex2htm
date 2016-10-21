@@ -238,7 +238,7 @@ def chomp_args(tex, pos):
 
 def next_command(tex, pos):
     """Get the next command in tex that occurs at or after pos"""
-    rx = re.compile(r'\\([a-zA-Z0-9]+)')
+    rx = re.compile(r'\\([a-zA-Z0-9]+\*?)')
     m = rx.search(tex, pos)
     if m:
         optargs, args, t, j = chomp_args(tex, m.end())
@@ -334,6 +334,7 @@ def process_chapter_cmd(text, cmd, mode):
     return blocks
 
 def process_section_cmd(text, cmd, mode):
+    print(cmd)
     ident = gen_unique_id()
     blocks = ['<h1 id="{}">'.format(ident)]
     htmlblocks = process_recursively(cmd.args[0], mode)
@@ -576,6 +577,7 @@ def tex2htm(tex):
     tex = re.sub(r'\\\]', r'\end{equation*}', tex)
     tex = re.sub(r'\$([^\$]*(\\\$)?)\$', r'\\begin{dollar}\1\\end{dollar}', tex,
                  0, re.M|re.S)
+    tex = re.sub(r'([^\\])\~', r'\1&nbsp;', tex)
     tex = re.sub(r'\\myeqref', '\\eqref', tex)
     tex = re.sub(r'---', r'&mdash;', tex)
     tex = re.sub(r'--', r'&ndash;', tex)
