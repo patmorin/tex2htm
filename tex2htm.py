@@ -6,6 +6,9 @@ import sys
 import re
 from collections import defaultdict
 
+from catlist import catlist
+
+#catlist = list
 
 # TODO: Import code
 # TODO: Use concatenable lists instead of Python list
@@ -79,7 +82,7 @@ def match_parens(tex, i, open, close):
 #
 def preprocess_hashes(subtex):
     """Prevents percents inside hashes from being treated as comments"""
-    blocks = list()
+    blocks = catlist()
     rx = re.compile('#([^#]*)#', re.M|re.S)
     lastidx = 0
     for m in rx.finditer(subtex):
@@ -142,7 +145,7 @@ def process_labels(tex):
 
     sec_ctr = [0]*(len(headings)+1)
     env_ctr = [0]*len(environments)
-    blocks = []
+    blocks = catlist()
     lastlabel = None
     lastidx = 0
     m = rx.search(tex, lastidx)
@@ -258,7 +261,7 @@ def setup_command_handlers():
     command_handlers['includegraphics'] =  process_graphics_cmd
     command_handlers['codeimport'] =  process_codeimport_cmd
     command_handlers['javaimport'] =  process_codeimport_cmd
-    command_handlers['cite'] =  lambda t, c, m: ['[{}]'.format(c.args[0])]
+    command_handlers['cite'] =  lambda t, c, m: catlist(['[{}]'.format(c.args[0])])
     command_handlers['ldots'] =  process_dots_cmd
     command_handlers['footnote'] = process_footnote_cmd
 
@@ -288,7 +291,7 @@ def process_cmd_default(tex, cmd, mode):
     return process_cmd_passthru(tex, cmd, mode)
 
 def process_cmd_passthru(tex, cmd, mode):
-    blocks = [r'\{}'.format(cmd.name)]
+    blocks = catlist([r'\{}'.format(cmd.name)])
     for a in cmd.optargs:
         blocks.append('[')
         blocks.extend(process_recursively(a, mode))
@@ -301,7 +304,7 @@ def process_cmd_passthru(tex, cmd, mode):
 
 def process_cmd_worthless(tex, cmd, mode):
     """ Worthless commands and arguments are completely completely removed """
-    return ['']
+    return catlist()
 
 def process_cmd_strip(text, cmd, mode):
     """ These commands have their arguments processed """
@@ -319,14 +322,14 @@ def process_dots_cmd(tex, cmd, mode):
         mapper = { 'ldots': '&hellip;',
                 'vdots': '&#x22ee;' }
         if cmd.name in mapper:
-            return [ mapper[cmd.name] ]
+            return catlist([mapper[cmd.name]])
     warn("Unrecognized non-math dots: {}".format(cmd.name))
-    return [ '?' ]
+    return catlist([ '?' ])
 
 def process_chapter_cmd(text, cmd, mode):
     global title
     title = cmd.args[0]
-    blocks = list()
+    blocks = catlist()
     blocks.append('<div class="chapter">')
     htmlblocks = process_recursively(cmd.args[0], mode)
     blocks.extend(htmlblocks)
@@ -334,9 +337,8 @@ def process_chapter_cmd(text, cmd, mode):
     return blocks
 
 def process_section_cmd(text, cmd, mode):
-    print(cmd)
     ident = gen_unique_id()
-    blocks = ['<h1 id="{}">'.format(ident)]
+    blocks = catlist(['<h1 id="{}">'.format(ident)])
     htmlblocks = process_recursively(cmd.args[0], mode)
     blocks.extend(htmlblocks)
     add_toc_entry(''.join(htmlblocks), ident)
@@ -344,47 +346,47 @@ def process_section_cmd(text, cmd, mode):
     return blocks
 
 def process_subsection_cmd(text, cmd, mode):
-    blocks = ["<h2>"]
+    blocks = catlist(["<h2>"])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</h2>")
     return blocks
 
 def process_subsubsection_cmd(text, cmd, mode):
-    blocks = ["<h2>"]
+    blocks = catlist(["<h2>"])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</h2>")
     return blocks
 
 def process_paragraph_cmd(text, cmd, mode):
-    blocks = ['<div class="paragraph_title">']
+    blocks = catlist(['<div class="paragraph_title">'])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</div><!-- paragraph_title -->")
     return blocks
 
 def process_emph_cmd(text, cmd, mode):
-    blocks = ["<em>"]
+    blocks = catlist(["<em>"])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</em>")
     return blocks
 
 def process_caption_cmd(text, cmd, mode):
-    blocks = ['<div class="caption">']
+    blocks = catlist(['<div class="caption">'])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</div><!-- caption -->")
     return blocks
 
 def process_graphics_cmd(text, cmd, mode):
-    return ['<img src="{}.svg"/>'.format(cmd.args[0], mode)]
+    return catlist(['<img src="{}.svg"/>'.format(cmd.args[0], mode)])
 
 def process_codeimport_cmd(tex, cmd, mode):
-    blocks = ['<div class="codeimport">']
+    blocks = catlist(['<div class="codeimport">'])
     blocks.extend(process_recursively(cmd.args[0], mode))
     blocks.append("</div><!-- codeimport -->")
     return blocks
 
 def process_footnote_cmd(tex, cmd, mode):
     global footnote_counter
-    blocks = list()
+    blocks = catlist()
     footnote_counter += 1
     blocks.append('<a class="ptr">({})</a>'.format(footnote_counter))
     fntext = ''.join(process_recursively(cmd.args[0], mode))
@@ -407,7 +409,7 @@ def process_ref_cmd(tex, cmd, mode):
                   named_entities[name], num)
     else:
         html = '<a href="#{}">{}&nbsp;{}</a>'.format(htmllabel, name, num)
-    return [ html ]
+    return catlist([html])
 #
 # LaTex environments
 #
@@ -477,12 +479,12 @@ def get_environment(tex, begincmd):
 def process_hash_env(b, env, mode):
     inner = r'\mathtt{{{}}}'.format(re.sub(r'(^|[^\\])&', r'\1\&', env.content))
     if mode & MATH:
-        return [ inner ]
+        return catlist([inner])
     else:
-        return [ r'\(', inner, r'\)' ]
+        return catlist([r'\(', inner, r'\)'])
 
 def process_env_passthru(b, env, mode):
-    blocks = [r'\begin{{{}}}'.format(env.name)]
+    blocks = catlist([r'\begin{{{}}}'.format(env.name)])
     blocks.extend(process_recursively(env.content, mode))
     blocks.append(r'\end{{{}}}'.format(env.name))
     return blocks
@@ -491,13 +493,13 @@ def process_displaymath_env(b, env, mode):
     return process_env_passthru(b, env, mode | MATH)
 
 def process_inlinemath_env(b, env, mode):
-    blocks = [r'\(']
+    blocks = catlist([r'\('])
     blocks.extend(process_recursively(env.content, mode | MATH))
     blocks.append(r'\)')
     return blocks
 
 def process_list_env(b, env, mode):
-    newblocks = list()
+    newblocks = catlist()
     mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul')])
     tag = mapper[env.name]
     newblocks.append('<{} class="{}">'.format(tag, env.name))
@@ -513,6 +515,7 @@ def process_list_items(b):
     return b
 
 def process_tabular_env(tex, env, mode):
+    # TODO: use a catlist of strings instead
     inner = "".join(process_recursively(env.content, mode))
     rows = re.split(r'\\\\', inner)
     rows = [re.split(r'\&', r) for r in rows]
@@ -523,10 +526,10 @@ def process_tabular_env(tex, env, mode):
             table += '<td>' + c + '</td>'
         table += '</tr>'
     table += '</table>'
-    return table
+    return catlist([table])
 
 def process_theoremlike_env(tex, env, mode):
-    newblocks = ['<div class="{}">'.format(env.name)]
+    newblocks = catlist(['<div class="{}">'.format(env.name)])
     if env.optargs:
         title = env.optargs[0]
     elif env.name in named_entities:
@@ -542,7 +545,7 @@ def process_theoremlike_env(tex, env, mode):
 def process_env_default(tex, env, mode):
     if not mode & MATH:
         unprocessed_environments.add(env.name)
-    newblocks = ['<div class="{}">'.format(env.name)]
+    newblocks = catlist(['<div class="{}">'.format(env.name)])
     newblocks.extend(process_recursively(env.content, mode))
     newblocks.append('</div><!-- {} -->'.format(env.name))
     return newblocks
@@ -551,7 +554,7 @@ def process_env_default(tex, env, mode):
 # The main processing loop
 #
 def process_recursively(tex, mode):
-    newblocks = list()
+    newblocks = catlist()
     lastidx = 0
     cmd = next_command(tex, lastidx)
     while cmd:
