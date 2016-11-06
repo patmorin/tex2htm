@@ -8,6 +8,8 @@ from collections import defaultdict
 
 from catlist import catlist
 
+import ods
+
 #catlist = list
 
 # TODO: Import code
@@ -80,17 +82,6 @@ def match_parens(tex, i, open, close):
 #
 # Preprocessing functions
 #
-def preprocess_hashes(subtex):
-    """Prevents percents inside hashes from being treated as comments"""
-    blocks = catlist()
-    rx = re.compile('#([^#]*)#', re.M|re.S)
-    lastidx = 0
-    for m in rx.finditer(subtex):
-        blocks.append(subtex[lastidx:m.start()])
-        lastidx = m.end()
-        blocks.append(re.sub(r'(^|[^\\])%', r'\1\%', m.group(0)))
-    blocks.append(subtex[lastidx:])
-    return "".join(blocks)
 
 def strip_comments(tex):
     lines = tex.splitlines()
@@ -259,8 +250,6 @@ def setup_command_handlers():
     command_handlers['emph'] =  process_emph_cmd
     command_handlers['caption'] =  process_caption_cmd
     command_handlers['includegraphics'] =  process_graphics_cmd
-    command_handlers['codeimport'] =  process_codeimport_cmd
-    command_handlers['javaimport'] =  process_codeimport_cmd
     command_handlers['cite'] =  lambda t, c, m: catlist(['[{}]'.format(c.args[0])])
     command_handlers['ldots'] =  process_dots_cmd
     command_handlers['footnote'] = process_footnote_cmd
@@ -276,10 +265,7 @@ def setup_command_handlers():
         command_handlers[t + 'label'] = process_cmd_worthless
         command_handlers[t + 'ref'] = process_ref_cmd
 
-    strip = ['javaonly', 'notpcode']
-    for c in strip:
-        command_handlers[c] = process_cmd_strip
-
+    # TODO: Find an exhaustive list of these
     mathbreakers = ['mbox', 'text']
     for c in mathbreakers:
         command_handlers[c] = process_mathbreaker_cmd
@@ -378,12 +364,6 @@ def process_caption_cmd(text, cmd, mode):
 def process_graphics_cmd(text, cmd, mode):
     return catlist(['<img src="{}.svg"/>'.format(cmd.args[0], mode)])
 
-def process_codeimport_cmd(tex, cmd, mode):
-    blocks = catlist(['<div class="codeimport">'])
-    blocks.extend(process_recursively(cmd.args[0], mode))
-    blocks.append("</div><!-- codeimport -->")
-    return blocks
-
 def process_footnote_cmd(tex, cmd, mode):
     global footnote_counter
     blocks = catlist()
@@ -433,7 +413,6 @@ class environment(object):
 def setup_environment_handlers():
     environment_handlers['dollar'] = process_inlinemath_env
     environment_handlers['tabular'] = process_tabular_env
-    environment_handlers['hash'] = process_hash_env
     displaymaths = ['equation', 'equation*', 'align', 'align*', 'eqnarray*']
     for name in displaymaths:
         environment_handlers[name] = process_displaymath_env
@@ -473,15 +452,6 @@ def get_environment(tex, begincmd):
             d -= 1
     return environment(name, optargs, args,
                        tex[pos0:m.start()], begincmd.start, m.end())
-
-
-
-def process_hash_env(b, env, mode):
-    inner = r'\mathtt{{{}}}'.format(re.sub(r'(^|[^\\])&', r'\1\&', env.content))
-    if mode & MATH:
-        return catlist([inner])
-    else:
-        return catlist([r'\(', inner, r'\)'])
 
 def process_env_passthru(b, env, mode):
     blocks = catlist([r'\begin{{{}}}'.format(env.name)])
@@ -573,7 +543,7 @@ def process_recursively(tex, mode):
 
 def tex2htm(tex):
     # Some preprocessing
-    tex = preprocess_hashes(tex)
+    tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
     tex = split_paragraphs(tex)
     tex = re.sub(r'\\\[', r'\\begin{equation*}', tex)
@@ -584,7 +554,7 @@ def tex2htm(tex):
     tex = re.sub(r'\\myeqref', '\\eqref', tex)
     tex = re.sub(r'---', r'&mdash;', tex)
     tex = re.sub(r'--', r'&ndash;', tex)
-    tex = re.sub('#([^#]*)#', r'\\begin{hash}\1\end{hash}', tex, 0, re.M|re.S)
+    tex = ods.convert_hashes(tex) # TODO: ods specific
 
     tex = process_labels(tex)
 
@@ -605,6 +575,10 @@ if __name__ == "__main__":
     # Setup a few things
     setup_environment_handlers()
     setup_command_handlers()
+
+    # TODO: ods specific
+    ods.setup_environment_handlers(environment_handlers)
+    ods.setup_command_handlers(command_handlers)
 
     # Read and translate the input
     tex = open(filename).read()
