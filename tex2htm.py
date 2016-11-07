@@ -253,6 +253,7 @@ def setup_command_handlers():
     command_handlers['cite'] =  lambda t, c, m: catlist(['[{}]'.format(c.args[0])])
     command_handlers['ldots'] =  process_dots_cmd
     command_handlers['footnote'] = process_footnote_cmd
+    command_handlers['centering'] = process_centering_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -364,6 +365,12 @@ def process_caption_cmd(text, cmd, mode):
 def process_graphics_cmd(text, cmd, mode):
     return catlist(['<img src="{}.svg"/>'.format(cmd.args[0], mode)])
 
+def process_centering_cmd(text, cmd, mode):
+    blocks = catlist(['<div class="centering">'])
+    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.append("</div><!-- caption -->")
+    return blocks
+
 def process_footnote_cmd(tex, cmd, mode):
     global footnote_counter
     blocks = catlist()
@@ -424,6 +431,7 @@ def setup_environment_handlers():
         environment_handlers[name] = process_list_env
     for name in theoremlike_environments:
         environment_handlers[name] = process_theoremlike_env
+    environment_handlers['center'] = process_center_env
 
 def get_environment(tex, begincmd):
     """ Get an environment that is started by begincmd.
@@ -512,6 +520,12 @@ def process_theoremlike_env(tex, env, mode):
     newblocks.append('</div><!-- {} -->'.format(env.name))
     return newblocks
 
+def process_center_env(tex, env, mode):
+    newblocks = catlist(['<div class="{}">'.format(env.name)])
+    newblocks.extend(process_recursively(env.content, mode))
+    newblocks.append('</div><!-- {} -->'.format(env.name))
+    return newblocks
+
 def process_env_default(tex, env, mode):
     if not mode & MATH:
         unprocessed_environments.add(env.name)
@@ -591,7 +605,7 @@ if __name__ == "__main__":
     if unprocessed_commands:
         commands = ", ".join(sorted(unprocessed_commands))
         warn("Unprocessed commands: {}".format(commands))
-    if unprocessed_commands:
+    if unprocessed_environments:
         environments = ", ".join(sorted(unprocessed_environments))
         warn("Defaulted environments: {}".format(environments))
 
