@@ -546,8 +546,8 @@ def tex2htm(tex):
     tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
     tex = split_paragraphs(tex)
-    tex = re.sub(r'\\\[', r'\\begin{equation*}', tex)
-    tex = re.sub(r'\\\]', r'\end{equation*}', tex)
+    tex = re.sub(r'([^\\])\\\[', r'\1\\begin{equation*}', tex)
+    tex = re.sub(r'([^\\])\\\]', r'\1\end{equation*}', tex)
     tex = re.sub(r'\$([^\$]*(\\\$)?)\$', r'\\begin{dollar}\1\\end{dollar}', tex,
                  0, re.M|re.S)
     tex = re.sub(r'([^\\])\~', r'\1&nbsp;', tex)
