@@ -1,4 +1,5 @@
 """ Open Data Structures specific extension for tex2htm """
+import os
 import re
 
 from catlist import catlist
@@ -30,10 +31,23 @@ def setup_command_handlers(command_handlers):
     for c in strip:
         command_handlers[c] = tex2htm.process_cmd_strip
 
+def get_member(member, clz):
+    basedir = '/home/morin/ods/java'
+    filename = basedir+os.path.sep+clz+'.java' # FIXME: hard-coded
+
+    for line in open(filename).read().splitlines()
+        line = re.sub('public|static|void|protected', '', line)
+
+
 def process_codeimport_cmd(tex, cmd, mode):
     blocks = catlist(['<div class="codeimport">'])
     blocks.extend(tex2htm.process_recursively(cmd.args[0], mode))
     blocks.append("</div><!-- codeimport -->")
+    print(cmd)
+    clz, members = cmd.args[0].split('.', 1)
+    members = members.split('.')
+    for member in members:
+        get_member(member, clz)
     return blocks
 
 def setup_environment_handlers(environment_handlers):

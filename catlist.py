@@ -1,4 +1,7 @@
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
+""" An implementation of concatentable lists
+"""
 
 
 class catlist_node(object):
@@ -11,11 +14,13 @@ class catlist(object):
         self.first = None
         self.last = None
         self.n = 0
+        self.dead = False
         if iterable:
             for x in iterable:
                 self.append(x)
 
     def append(self, x):
+        assert(not self.dead)
         node = catlist_node(x)
         if self.n == 0:
             self.first = node
@@ -26,6 +31,8 @@ class catlist(object):
         self.n += 1
 
     def extend(self, other):
+        assert(not self.dead)
+        assert(not other.dead)
         assert type(other) is catlist
         if other.n == 0: return
         if self.n == 0:
@@ -35,18 +42,21 @@ class catlist(object):
             self.last.cdr = other.first
             self.last = other.last
         self.n += other.n
-        other.__init__()   # clear other
+        other.dead = True
 
     def __iter__(self):
+        assert(not self.dead)
         it = self.first
         while not it is None:
             yield it.car
             it = it.cdr
 
     def __str__(self):
+        assert(not self.dead)
         return "〈{}〉)".format(",".join([str(x) for x in self]))
 
     def __repr__(self):
+        assert(not self.dead)
         return "catlist([{}]))".format(",".join([repr(x) for x in self]))
 
 if __name__ == "__main__":
@@ -60,3 +70,5 @@ if __name__ == "__main__":
     c.extend(c2)
     print(c)
     print(c2)
+    c3 = catlist([str(x) for x in c])
+    print(",".join(c3))

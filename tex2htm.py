@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-""" tex2htm.py - A LaTeX to HTML conversion utility
+""" A LaTeX to HTML conversion utility
 """
 import os
 import sys
@@ -12,7 +12,6 @@ from catlist import catlist
 import ods
 
 # TODO: Import code
-# TODO: Use concatenable lists instead of Python list
 # TODO: Bibliographies
 
 # Some global variables - TODO: Wrap these into a class
@@ -48,7 +47,7 @@ footnotes = list()
 title = 'Untitled'
 
 # Table of contents
-toc = list()
+toc = catlist()
 
 # Math mode
 MATH = 1
@@ -272,7 +271,7 @@ def setup_command_handlers():
 
 def process_cmd_default(tex, cmd, mode):
     """ By default, we just pass commands through untouched """
-    if not mode & MATH:
+    if not (mode & MATH):
         unprocessed_commands.add(cmd.name)
     return process_cmd_passthru(tex, cmd, mode)
 
@@ -326,8 +325,8 @@ def process_section_cmd(text, cmd, mode):
     ident = gen_unique_id()
     blocks = catlist(['<h1 id="{}">'.format(ident)])
     htmlblocks = process_recursively(cmd.args[0], mode)
-    blocks.extend(htmlblocks)
     add_toc_entry(''.join(htmlblocks), ident)
+    blocks.extend(htmlblocks)
     blocks.append("</h1>")
     return blocks
 
@@ -616,7 +615,6 @@ if __name__ == "__main__":
     head = re.sub('TOC', ''.join(toc), head)
 
     tail = re.sub('FOOTNOTES', ''.join(footnotes), tail)
-
 
     # Write everything
     of = open(outfile, 'w')
