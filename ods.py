@@ -2,6 +2,7 @@
 import re
 
 from catlist import catlist
+#catlist = list
 
 import tex2htm
 
@@ -24,7 +25,7 @@ def convert_hashes(tex):
 def setup_command_handlers(command_handlers):
     command_handlers['codeimport'] =  process_codeimport_cmd
     command_handlers['javaimport'] =  process_codeimport_cmd
-
+    command_handlers['etal'] = lambda text, cmd, mode: catlist(["<em>et al</em>"])
     strip = ['javaonly', 'notpcode']
     for c in strip:
         command_handlers[c] = tex2htm.process_cmd_strip

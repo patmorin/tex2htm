@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 """ tex2htm.py - A LaTeX to HTML conversion utility
 """
 import os
@@ -9,8 +10,6 @@ from collections import defaultdict
 from catlist import catlist
 
 import ods
-
-#catlist = list
 
 # TODO: Import code
 # TODO: Use concatenable lists instead of Python list
@@ -290,7 +289,7 @@ def process_cmd_passthru(tex, cmd, mode):
     return blocks
 
 def process_cmd_worthless(tex, cmd, mode):
-    """ Worthless commands and arguments are completely completely removed """
+    """ Worthless commands and arguments are completely removed """
     return catlist()
 
 def process_cmd_strip(text, cmd, mode):
