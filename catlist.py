@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-""" An implementation of concatentable lists
+""" An implementation of concatenable lists
 """
 
 

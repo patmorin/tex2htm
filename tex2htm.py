@@ -13,6 +13,7 @@ import ods
 
 # TODO: Import code
 # TODO: Bibliographies
+# TODO: Handle brace blocks that are misidentified as arguments
 
 # Some global variables - TODO: Wrap these into a class
 environment_handlers = defaultdict(lambda: process_env_default)
@@ -22,6 +23,7 @@ command_handlers = defaultdict(lambda: process_cmd_default)
 named_entities = {'chap': 'Chapter',
                   'sec': 'Section',
                   'thm': 'Theorem',
+                  'prp': 'Property',
                   'lem': 'Lemma',
                   'fig': 'Figure',
                   'figure': 'Figure',
@@ -29,7 +31,7 @@ named_entities = {'chap': 'Chapter',
                   'exc': 'Exercise',
                   'proof': 'Proof'}
 
-theoremlike_environments = {'thm', 'lem', 'exc', 'proof'}
+theoremlike_environments = {'thm', 'lem', 'exc', 'prp', 'proof'}
 
 # Map LaTeX labels on to HTML id's
 label_map = dict()
@@ -62,21 +64,28 @@ def abort(msg, status=-1):
 def warn(msg, level=0):
     sys.stderr.write("Warning: {}\n".format(msg))
 
+def skip_space(tex, i):
+    while i < len(tex) and tex[i].isspace():
+        i += 1
+    return i
+
 def match_parens(tex, i, open, close):
     # TODO: Handle escape sequences
     di = defaultdict(int, {open: 1, close: -1})
-    if i == len(tex): return i
+    j0 = skip_space(tex, i)
+    if j0 == len(tex): return i,i+1
+    j = j0
     try:
-        d = di[tex[i]]
-        j = i+d
+        d = di[tex[j]]
+        if d == 0: return i,i+1
+        j = j+d
         while d > 0:
             d += di[tex[j]]
             j+=1
-        return j
+        return j0,j
     except IndexError:
         abort("Couldn't match parenthesis:\n... "
-              + tex[max(0,i-25):min(len(tex,i+25))])
-
+              + tex[max(0,i):min(len(tex),i+25)])
 #
 # Preprocessing functions
 #
@@ -214,17 +223,17 @@ class command(object):
 def chomp_args(tex, pos):
     optargs = []
     j = pos
-    k = match_parens(tex, j, '[', ']')
-    while k > j:
+    j,k = match_parens(tex, j, '[', ']')
+    while k > j+1:
         optargs.append(tex[j+1:k-1])
         j = k
-        k = match_parens(tex, j, '[', ']')
+        j,k = match_parens(tex, j, '[', ']')
     args = []
-    k = match_parens(tex, j, '{', '}')
-    while k > j:
+    j,k = match_parens(tex, j, '{', '}')
+    while k > j+1:
         args.append(tex[j+1:k-1])
         j = k
-        k = match_parens(tex, j, '{', '}')
+        j,k = match_parens(tex, j, '{', '}')
     return (optargs, args, pos, j)
 
 
@@ -246,12 +255,17 @@ def setup_command_handlers():
     command_handlers['subsubsection'] =  process_subsubsection_cmd
     command_handlers['paragraph'] =  process_paragraph_cmd
     command_handlers['emph'] =  process_emph_cmd
+    command_handlers['texttt'] =  process_texttt_cmd
     command_handlers['caption'] =  process_caption_cmd
     command_handlers['includegraphics'] =  process_graphics_cmd
     command_handlers['cite'] =  lambda t, c, m: catlist(['[{}]'.format(c.args[0])])
+    command_handlers['newblock'] =  lambda t, c, m: catlist(['<br>'])
     command_handlers['ldots'] =  process_dots_cmd
     command_handlers['footnote'] = process_footnote_cmd
     command_handlers['centering'] = process_centering_cmd
+    command_handlers['href'] = process_href_cmd
+    command_handlers['url'] = process_url_cmd
+    command_handlers['path'] = process_path_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -259,7 +273,7 @@ def setup_command_handlers():
     for c in worthless:
         command_handlers[c] = process_cmd_worthless
 
-    labeltypes = ['', 'fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec']
+    labeltypes = ['', 'fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec', 'thm']
     for t in labeltypes:
         command_handlers[t + 'label'] = process_cmd_worthless
         command_handlers[t + 'ref'] = process_ref_cmd
@@ -298,6 +312,9 @@ def process_cmd_strip(text, cmd, mode):
 def process_mathbreaker_cmd(text, cmd, mode):
     """ These command break out of math mode """
     return process_cmd_passthru(text, cmd, mode & ~MATH)
+
+def process_path_cmd(tex, cmd, mode):
+    return catlist(['<span class="path">{}</span>'.format(cmd.args[0])])
 
 def process_dots_cmd(tex, cmd, mode):
     """ Various kinds of ellipses """
@@ -354,6 +371,12 @@ def process_emph_cmd(text, cmd, mode):
     blocks.append("</em>")
     return blocks
 
+def process_texttt_cmd(text, cmd, mode):
+    blocks = catlist(["<span class='tt'>"])
+    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.append("</span>")
+    return blocks
+
 def process_caption_cmd(text, cmd, mode):
     blocks = catlist(['<div class="caption">'])
     blocks.extend(process_recursively(cmd.args[0], mode))
@@ -376,6 +399,15 @@ def process_footnote_cmd(tex, cmd, mode):
     blocks.append('<a class="ptr">({})</a>'.format(footnote_counter))
     fntext = ''.join(process_recursively(cmd.args[0], mode))
     footnotes.append('<li>{}</li>'.format(fntext))
+    return blocks
+
+def process_url_cmd(tex, cmd, mode):
+    return catlist(["<a href='{url}'>{url}</a>".format(url=cmd.args[0])])
+
+def process_href_cmd(tex, cmd, mode):
+    blocks = catlist(["<a href='{}'>".format(cmd.args[0])])
+    blocks.extend(process_recursively(cmd.args[1], mode))
+    blocks.append("</a>")
     return blocks
 
 def process_ref_cmd(tex, cmd, mode):
@@ -430,6 +462,7 @@ def setup_environment_handlers():
     for name in theoremlike_environments:
         environment_handlers[name] = process_theoremlike_env
     environment_handlers['center'] = process_center_env
+    environment_handlers['thebibliography'] = process_thebibliography_env
 
 def get_environment(tex, begincmd):
     """ Get an environment that is started by begincmd.
@@ -474,9 +507,19 @@ def process_inlinemath_env(b, env, mode):
     blocks.append(r'\)')
     return blocks
 
+def process_thebibliography_env(b, env, mode):
+    env.content = re.sub('{thebibliography}', '{enumerate}', env.content)
+    env.content = re.sub(r'\\bibitem\s*{(\w+)}', r'\item', env.content)
+    blocks = process_list_env(b, env, mode)
+    txt = "".join(b for b in blocks)
+    # bibtex-generated bibliographies are full of superfluous braces
+    txt = re.sub(r'{([^}]*)}', r'\1', txt)
+    return catlist([txt])
+
 def process_list_env(b, env, mode):
     newblocks = catlist()
-    mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul')])
+    mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul'),
+                   ('thebibliography', 'ol')])
     tag = mapper[env.name]
     newblocks.append('<{} class="{}">'.format(tag, env.name))
     newblocks.extend(process_recursively(process_list_items(env.content), mode))
@@ -552,11 +595,39 @@ def process_recursively(tex, mode):
     newblocks.append(tex[lastidx:])
     return newblocks
 
+def cleanup_oldschool(tex):
+    # Cleanup some old school tex font control
+    tex = re.sub(r'{\s*\\em', r'\\emph{', tex)
+    tex = re.sub(r'{\s*\\bf', r'\\textbf{', tex)
+    return tex
+
+def cleanup_accented_chars(tex):
+    mapper = [("'",'e','é'),
+              ("'",'o','ó'),
+              ("'",'c','ć'),
+              ("'",r'\\i','í'),
+              ('"',r'\\i','ï'),
+              ('u','a','ă'),
+              ('v','a','ă'),   # FIXME: Not quite
+              ('c','s','ş')
+             ]
+    for m in mapper:
+        pattern = r'\\{cmd}(\s*{arg}|\{{{arg}\}})'.format(cmd=m[0], arg=m[1])
+        tex = re.sub(pattern, m[2], tex)
+    for x in ['`', "'", '"']:
+        pattern = r'\\{}'.format(x)
+        m = re.search(pattern, tex)
+        if m:
+            warn("Unhandled accent: {}".format(tex[m.start():min(len(tex),
+                                                                 m.start()+8)]))
+    return tex
 
 def tex2htm(tex):
     # Some preprocessing
     tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
+    tex = cleanup_oldschool(tex)
+    tex = cleanup_accented_chars(tex)
     tex = split_paragraphs(tex)
     tex = re.sub(r'([^\\])\\\[', r'\1\\begin{equation*}', tex)
     tex = re.sub(r'([^\\])\\\]', r'\1\end{equation*}', tex)
