@@ -5,14 +5,13 @@
 import os
 import sys
 import re
+import subprocess
 from collections import defaultdict
 
 from catlist import catlist
 
 import ods
 
-# TODO: Import code
-# TODO: Bibliographies
 # TODO: Handle brace blocks that are misidentified as arguments
 
 # Some global variables - TODO: Wrap these into a class
@@ -24,6 +23,7 @@ named_entities = {'chap': 'Chapter',
                   'sec': 'Section',
                   'thm': 'Theorem',
                   'prp': 'Property',
+                  'cor': 'Corollary',
                   'lem': 'Lemma',
                   'fig': 'Figure',
                   'figure': 'Figure',
@@ -31,7 +31,7 @@ named_entities = {'chap': 'Chapter',
                   'exc': 'Exercise',
                   'proof': 'Proof'}
 
-theoremlike_environments = {'thm', 'lem', 'exc', 'prp', 'proof'}
+theoremlike_environments = {'thm', 'lem', 'cor', 'exc', 'prp', 'proof'}
 
 # Map LaTeX labels on to HTML id's
 label_map = dict()
@@ -41,6 +41,9 @@ undefined_labels = set()
 unprocessed_commands = set()
 unprocessed_environments = set()
 
+# Graphics files to generate after processing is done
+graphics_files = set()
+
 # Used for processing footnotes
 footnote_counter = 0
 footnotes = list()
@@ -49,6 +52,7 @@ footnotes = list()
 title = 'Untitled'
 
 # Table of contents
+global_toc = catlist()
 toc = catlist()
 
 # Math mode
@@ -122,12 +126,12 @@ def gen_unique_id(prefix=''):
     return '{}-{}'.format(prefix, id_counter)
 
 #
-# Label and Refeference Handling
+# Label and Reference Handling
 # TODO: The insertion of numbers into theorem-like, sectioning commands,
 #       and captions is super hacky. Consider using JavaScript to do this,
 #       like here: https://github.com/rauschma/html_demos
 #
-def process_labels(tex):
+def process_labels(tex, chapter):
     """ Process all the labels that occur in tex
 
         This works by scanning for commands and environments that alter
@@ -141,7 +145,7 @@ def process_labels(tex):
     bigone = r'\\({})|\\({})|\\({})|\\(caption)'.format(reh, ree, rel)
     rx = re.compile(bigone)
 
-    sec_ctr = [0]*(len(headings)+1)
+    sec_ctr = [chapter] + [0]*(len(headings))
     env_ctr = [0]*len(environments)
     blocks = catlist()
     lastlabel = None
@@ -223,7 +227,10 @@ class command(object):
 def chomp_args(tex, pos):
     optargs = []
     j = pos
-    j,k = match_parens(tex, j, '[', ']')
+    try:
+        j,k = match_parens(tex, j, '[', ']')
+    except:
+        return([], [], pos, j)
     while k > j+1:
         optargs.append(tex[j+1:k-1])
         j = k
@@ -255,6 +262,7 @@ def setup_command_handlers():
     command_handlers['subsubsection'] =  process_subsubsection_cmd
     command_handlers['paragraph'] =  process_paragraph_cmd
     command_handlers['emph'] =  process_emph_cmd
+    command_handlers['textbf'] =  process_textbf_cmd
     command_handlers['texttt'] =  process_texttt_cmd
     command_handlers['caption'] =  process_caption_cmd
     command_handlers['includegraphics'] =  process_graphics_cmd
@@ -269,11 +277,12 @@ def setup_command_handlers():
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
-                 'end', 'hline', 'noindent']
+                 'end', 'hline', 'noindent', 'pagenumbering', 'linewidth',
+                 'newcommand', 'resizebox', 'setcounter', 'multicolumn']
     for c in worthless:
         command_handlers[c] = process_cmd_worthless
 
-    labeltypes = ['', 'fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec', 'thm']
+    labeltypes = ['', 'fig', 'Fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec', 'thm']
     for t in labeltypes:
         command_handlers[t + 'label'] = process_cmd_worthless
         command_handlers[t + 'ref'] = process_ref_cmd
@@ -332,8 +341,10 @@ def process_chapter_cmd(text, cmd, mode):
     global title
     title = cmd.args[0]
     blocks = catlist()
-    blocks.append('<div class="chapter">')
+    ident = gen_unique_id()
+    blocks.append('<div id="{}" class="chapter">'.format(ident))
     htmlblocks = process_recursively(cmd.args[0], mode)
+    add_toc_entry(''.join(htmlblocks), ident)
     blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
@@ -371,6 +382,12 @@ def process_emph_cmd(text, cmd, mode):
     blocks.append("</em>")
     return blocks
 
+def process_textbf_cmd(text, cmd, mode):
+    blocks = catlist(["<span class='bf'>"])
+    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.append("</span>")
+    return blocks
+
 def process_texttt_cmd(text, cmd, mode):
     blocks = catlist(["<span class='tt'>"])
     blocks.extend(process_recursively(cmd.args[0], mode))
@@ -384,7 +401,9 @@ def process_caption_cmd(text, cmd, mode):
     return blocks
 
 def process_graphics_cmd(text, cmd, mode):
-    return catlist(['<img src="{}.svg"/>'.format(cmd.args[0], mode)])
+    filename = "{}.svg".format(cmd.args[0])
+    graphics_files.add(filename)
+    return catlist(['<img src="{}"/>'.format(filename)])
 
 def process_centering_cmd(text, cmd, mode):
     blocks = catlist(['<div class="centering">'])
@@ -427,6 +446,7 @@ def process_ref_cmd(tex, cmd, mode):
     else:
         html = '<a href="#{}">{}&nbsp;{}</a>'.format(htmllabel, name, num)
     return catlist([html])
+
 #
 # LaTex environments
 #
@@ -456,7 +476,7 @@ def setup_environment_handlers():
     passthroughs = ['array', 'cases']
     for name in passthroughs:
         environment_handlers[name] = process_env_passthru
-    lists = ['itemize', 'enumerate', 'list']
+    lists = ['itemize', 'enumerate', 'list', 'description']
     for name in lists:
         environment_handlers[name] = process_list_env
     for name in theoremlike_environments:
@@ -481,7 +501,7 @@ def get_environment(tex, begincmd):
     d = 1
     regex = r'\\(begin|end){{{}}}'.format(re.escape(name))
     rx = re.compile(regex)
-    while d >= 0:
+    while d > 0:
         m = rx.search(tex, pos)
         if not m:
             abort("Unmatched environment:". format(name))
@@ -489,6 +509,7 @@ def get_environment(tex, begincmd):
             d += 1
         else:
             d -= 1
+        pos = m.end()
     return environment(name, optargs, args,
                        tex[pos0:m.start()], begincmd.start, m.end())
 
@@ -519,7 +540,7 @@ def process_thebibliography_env(b, env, mode):
 def process_list_env(b, env, mode):
     newblocks = catlist()
     mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul'),
-                   ('thebibliography', 'ol')])
+                   ('thebibliography', 'ol'), ('description', 'ul')])
     tag = mapper[env.name]
     newblocks.append('<{} class="{}">'.format(tag, env.name))
     newblocks.extend(process_recursively(process_list_items(env.content), mode))
@@ -622,7 +643,7 @@ def cleanup_accented_chars(tex):
                                                                  m.start()+8)]))
     return tex
 
-def tex2htm(tex):
+def tex2htm(tex, chapter):
     # Some preprocessing
     tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
@@ -639,22 +660,74 @@ def tex2htm(tex):
     tex = re.sub(r'--', r'&ndash;', tex)
     tex = ods.convert_hashes(tex) # TODO: ods specific
 
-    tex = process_labels(tex)
+    tex = process_labels(tex, chapter)
 
     blocks = process_recursively(tex, 0)
 
     return "".join(blocks)
 
-if __name__ == "__main__":
-    print(sys.argv[0])
-    if len(sys.argv) != 2:
-        sys.stderr.write("Usage: {} <texfile>\n".format(sys.argv[0]))
-        sys.exit(-1)
-    filename = sys.argv[1]
+def generate_graphics_files(filenames, basedir):
+    filenames = [basedir+os.path.sep+f for f in filenames]
+    filenames = [f for f in filenames if not os.path.isfile(f)]
+    fp = open('/dev/null', 'w')
+    for f in filenames:
+        f, ext = os.path.splitext(f)
+        if ext != '.svg':
+            warn("Unknown graphics type: {} for {}".format(ext, f+ext))
+            continue
+        m = re.search(r'(.*)-(\d+)$', f)
+        cmd = ['iperender', '-svg']
+        if m:
+            ipefile = m.group(1) + ".ipe"
+            view = m.group(2)
+            cmd.extend(['-view', view])
+        else:
+            ipefile = f + ".ipe"
+        svgfile = f + ext
+        cmd.extend([ipefile, svgfile])
+        status = subprocess.call(cmd, stdin=fp, stdout=fp, stderr=fp)
+        if status:
+            msg = "{} gave non-zero exit status for {}".format(cmd[0], ipefile)
+            warn(msg)
+    fp.close()
+
+
+def process_file(filename, chapter):
+    dirname = os.path.dirname(filename)
     base, ext = os.path.splitext(filename)
     outfile = base + ".html"
     print("Reading from {} and writing to {}".format(filename, outfile))
 
+    # Read and translate the input
+    tex = open(filename).read()
+    htm = tex2htm(tex, chapter)
+
+    # Read the skeleton
+    basedir = os.path.dirname(sys.argv[0])
+    filename = basedir + os.path.sep + 'skeleton.htm'
+    (head, tail) = re.split('CONTENT', open(filename).read())
+    head = re.sub('TITLE', title, head)
+
+
+    head = re.sub('TOC', ''.join(toc), head)
+    global_toc.extend(toc)
+    toc.__init__()
+
+    tail = tail.replace('FOOTNOTES', ''.join(footnotes))
+
+    # Write everything
+    of = open(outfile, 'w')
+    of.write(head)
+    of.write(htm)
+    of.write(tail)
+    of.close()
+
+    # Generate any necessary graphics files
+    generate_graphics_files(graphics_files, dirname)
+    graphics_files.clear()
+
+
+if __name__ == "__main__":
     # Setup a few things
     setup_environment_handlers()
     setup_command_handlers()
@@ -663,9 +736,28 @@ if __name__ == "__main__":
     ods.setup_environment_handlers(environment_handlers)
     ods.setup_command_handlers(command_handlers)
 
-    # Read and translate the input
-    tex = open(filename).read()
-    htm = tex2htm(tex)
+    # Process all the command line arguments
+    chapter = 0
+    for filename in sys.argv[1:]:
+        #try:
+        process_file(filename, chapter)
+        chapter += 1
+        #except:
+        #    warn("An error occurred when processing {}".format(filename))
+
+    # Create table of contents
+    title = 'Open Data Structures'
+    basedir = os.path.dirname(sys.argv[0])
+    filename = basedir + os.path.sep + 'skeleton.htm'
+    (head, tail) = re.split('CONTENT', open(filename).read())
+    head = re.sub('TITLE', title, head)
+    head = re.sub('TOC', ''.join(global_toc), head)
+
+    tocfile = 'toc.html'
+    fp = open(tocfile, 'w')
+    fp.write(head)
+    fp.write(tail)
+    fp.close()
 
     # Print warnings
     if undefined_labels:
@@ -677,19 +769,3 @@ if __name__ == "__main__":
     if unprocessed_environments:
         environments = ", ".join(sorted(unprocessed_environments))
         warn("Defaulted environments: {}".format(environments))
-
-    # Read the skeleton
-    basedir = os.path.dirname(sys.argv[0])
-    filename = basedir + os.path.sep + 'skeleton.htm'
-    (head, tail) = re.split('CONTENT', open(filename).read())
-    head = re.sub('TITLE', title, head)
-    head = re.sub('TOC', ''.join(toc), head)
-
-    tail = re.sub('FOOTNOTES', ''.join(footnotes), tail)
-
-    # Write everything
-    of = open(outfile, 'w')
-    of.write(head)
-    of.write(htm)
-    of.write(tail)
-    of.close()

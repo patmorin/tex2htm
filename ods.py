@@ -13,21 +13,50 @@ from catlist import catlist
 
 import tex2htm
 
+# This is a regular expression I've debugged for doing hash substitutions
+hash_rx = re.compile(r'(^|#|[^\\])#(([^#]|\\#)*[^\\#])#', re.M|re.S)
 
+def text_sample(txt):
+    if len(txt) < 50:
+        return txt
+    return txt[:20] + '...' + txt[-20:]
+
+# NOTE: Looks more complicated than necessary, but actually had to
+#       be written this way to work around a problem with adjacent matches
+#       Try the string r'\[#x##y#\bmod m\]'
 def preprocess_hashes(tex):
     """Prevents percents inside hashes from being treated as comments"""
     blocks = catlist()
-    rx = re.compile('#([^#]*)#', re.M|re.S)
-    lastidx = 0
-    for m in rx.finditer(tex):
-        blocks.append(tex[lastidx:m.start()])
-        lastidx = m.end()
+    rx = hash_rx
+    m = rx.search(tex)
+    while m:
+        if len(m.group(2)) > 40:
+            tex2htm.warn("Possible runaway hash: {}".format(text_sample(m.group(2))))
+            raise(None)
+        blocks.append(tex[:m.start()])
         blocks.append(re.sub(r'(^|[^\\])%', r'\1\%', m.group(0)))
-    blocks.append(tex[lastidx:])
+        tex = tex[m.end():]
+        m = rx.search(tex)
+    blocks.append(tex)
     return "".join(blocks)
 
+# NOTE: Looks more complicated than necessary, but actually had to
+#       be written this way to work around a problem with adjacent matches
+#       Try the string r'\[#x##y#\bmod m\]'
 def convert_hashes(tex):
-    return re.sub('#([^#]*)#', r'\\begin{hash}\1\end{hash}', tex, 0, re.M|re.S)
+    blocks = catlist()
+    rx = hash_rx
+    m = rx.search(tex)
+    while m:
+        if len(m.group(2)) > 40:
+            tex2htm.warn("Possible runaway hash: {}".format(text_sample(m.group(2))))
+        blocks.append(tex[:m.start()])
+        blocks.append('{}\\begin{{hash}}{}\\end{{hash}}'.format(m.group(1),
+                        m.group(2)))
+        tex = tex[m.end():]
+        m = rx.search(tex)
+    blocks.append(tex)
+    return "".join(blocks)
 
 def setup_command_handlers(command_handlers):
     command_handlers['codeimport'] =  process_codeimport_cmd
@@ -42,8 +71,7 @@ def setup_command_handlers(command_handlers):
         command_handlers[c] = tex2htm.process_cmd_strip
 
 def get_member(member, clz):
-    basedir = os.path.dirname(sys.argv[1]) + os.path.sep \
-                + '..' + os.path.sep + 'java'
+    basedir = os.path.dirname(sys.argv[1]) + os.path.sep + 'java'
     filename = basedir+os.path.sep+clz+'.java' # FIXME: hard-coded
     code = catlist()
     d = 0
