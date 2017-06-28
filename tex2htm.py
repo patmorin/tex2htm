@@ -13,7 +13,8 @@ from catlist import catlist
 import ods
 
 # TODO: Support for importing subclasses
-# TODO: References across sections
+# TODO: More parsing cleanup
+# TODO: pageref
 # TODO: Handle brace blocks that are misidentified as arguments
 
 
@@ -709,7 +710,6 @@ def generate_graphics_files(filenames, basedir):
             msg = "{} gave non-zero exit status for {}".format(cmd[0], ipefile)
             warn(msg)
     fp.close()
-
 
 def finish_crossrefs(filename, label_map, html):
     blocks = catlist()
