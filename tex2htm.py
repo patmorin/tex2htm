@@ -12,7 +12,10 @@ from catlist import catlist
 
 import ods
 
+# TODO: Support for importing subclasses
+# TODO: References across sections
 # TODO: Handle brace blocks that are misidentified as arguments
+
 
 # Some global variables - TODO: Wrap these into a class
 environment_handlers = defaultdict(lambda: process_env_default)
@@ -50,6 +53,7 @@ footnotes = list()
 
 # Document title
 title = 'Untitled'
+#outputfile
 
 # Table of contents
 global_toc = catlist()
@@ -190,7 +194,7 @@ def process_labels(tex, chapter):
         elif m.group(7):
             # This is a labelling command (\thmlabel, \seclabel,...)
             label = "{}:{}".format(m.group(7), m.group(8))
-            label_map[label] = lastlabel
+            label_map[label] = (outputfile, lastlabel)
 
         elif m.group(9):
             # This is a caption command
@@ -266,7 +270,7 @@ def setup_command_handlers():
     command_handlers['texttt'] =  process_texttt_cmd
     command_handlers['caption'] =  process_caption_cmd
     command_handlers['includegraphics'] =  process_graphics_cmd
-    command_handlers['cite'] =  lambda t, c, m: catlist(['[{}]'.format(c.args[0])])
+    command_handlers['cite'] =  process_cite_cmd
     command_handlers['newblock'] =  lambda t, c, m: catlist(['<br>'])
     command_handlers['ldots'] =  process_dots_cmd
     command_handlers['footnote'] = process_footnote_cmd
@@ -403,7 +407,7 @@ def process_caption_cmd(text, cmd, mode):
 def process_graphics_cmd(text, cmd, mode):
     filename = "{}.svg".format(cmd.args[0])
     graphics_files.add(filename)
-    return catlist(['<img src="{}"/>'.format(filename)])
+    return catlist(['<span class="imgwrap"><img class="includegraphics" src="{}"/></span>'.format(filename)])
 
 def process_centering_cmd(text, cmd, mode):
     blocks = catlist(['<div class="centering">'])
@@ -432,20 +436,17 @@ def process_href_cmd(tex, cmd, mode):
 def process_ref_cmd(tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
     texlabel = "{}:{}".format(name, cmd.args[0])
-    if texlabel in label_map:
-        htmllabel = label_map[texlabel]
-        num = htmllabel[htmllabel.find(':')+1:]
-    else:
-        undefined_labels.add(texlabel)
-        htmllabel = 'REFERR'
-        num = '??'
-
-    if name in named_entities:
-        html = '<a href="#{}">{}&nbsp;{}</a>'.format(htmllabel,
-                  named_entities[name], num)
-    else:
-        html = '<a href="#{}">{}&nbsp;{}</a>'.format(htmllabel, name, num)
+    html = 'CROSSREF{}XXX{}YYY'.format(texlabel, name)
     return catlist([html])
+
+def process_cite_cmd(tex, cmd, mode):
+    blocks = catlist(['['])
+    args = [s.strip() for s in cmd.args[0].split(',')]
+    texlabels = ["cite:{}".format(a) for a in args]
+    htmls = ['CROSSREF{}XXXciteYYY'.format(texlabel) for texlabel in texlabels]
+    blocks.append(",".join(htmls))
+    blocks.append(']')
+    return blocks
 
 #
 # LaTex environments
@@ -530,7 +531,22 @@ def process_inlinemath_env(b, env, mode):
 
 def process_thebibliography_env(b, env, mode):
     env.content = re.sub('{thebibliography}', '{enumerate}', env.content)
-    env.content = re.sub(r'\\bibitem\s*{(\w+)}', r'\item', env.content)
+    blocks = catlist()
+    ref = 1
+    i = 0
+    rx = re.compile(r'\\bibitem\s*{(\w+)}')
+    for m in rx.finditer(env.content):
+        blocks.append(env.content[i:m.start()])
+        i = m.end()
+        texlabel = "cite:{}".format(m.group(1))
+        htmllabel = 'cite:{}'.format(ref)
+        ref += 1
+        label_map[texlabel] = (outputfile, htmllabel)
+        blocks.append(r'<a id="{}"</a>'.format(htmllabel))
+        blocks.append(r'\item')
+    blocks.append(env.content[i:])
+    env.content = "".join(blocks)
+    # env.content = re.sub(r'\\bibitem\s*{(\w+)}', r'\item', env.content)
     blocks = process_list_env(b, env, mode)
     txt = "".join(b for b in blocks)
     # bibtex-generated bibliographies are full of superfluous braces
@@ -620,6 +636,9 @@ def cleanup_oldschool(tex):
     # Cleanup some old school tex font control
     tex = re.sub(r'{\s*\\em', r'\\emph{', tex)
     tex = re.sub(r'{\s*\\bf', r'\\textbf{', tex)
+    tex = re.sub(r"``", r'<q>', tex)
+    tex = re.sub(r"''", r'</q>', tex)
+
     return tex
 
 def cleanup_accented_chars(tex):
@@ -692,60 +711,111 @@ def generate_graphics_files(filenames, basedir):
     fp.close()
 
 
-def process_file(filename, chapter):
-    dirname = os.path.dirname(filename)
-    base, ext = os.path.splitext(filename)
-    outfile = base + ".html"
-    print("Reading from {} and writing to {}".format(filename, outfile))
+def finish_crossrefs(filename, label_map, html):
+    blocks = catlist()
+    i = 0
+    rx = re.compile(r'CROSSREF((\w|:)+)XXX(\w+)YYY')
+    for m in rx.finditer(html):
+        blocks.append(html[i:m.start()])
+        i = m.end()
+        texlabel = m.group(1)
+        name = m.group(3)
+        if texlabel in label_map:
+            f, ell = label_map[texlabel]
+            if filename == f:
+                htmllabel = "#{}".format(ell)
+            else:
+                htmllabel = "{}#{}".format(relative_path(filename, f), ell)
+            num = htmllabel[htmllabel.find(':')+1:]
+        else:
+            undefined_labels.add(texlabel)
+            htmllabel = '#REFERR'
+            num = '??'
+        if name == 'cite':
+            blocks.append('<a href="{}">{}</a>'.format(htmllabel, num))
+        elif name in named_entities:
+            blocks.append('<a href="{}">{}&nbsp;{}</a>'.format(htmllabel,
+                               named_entities[name], num))
+        else:
+            blocks.append('<a href="{}">{}&nbsp;{}</a>'.format(htmllabel,
+                                name, num))
+    blocks.append(html[i:])
+    return "".join(blocks)
+
+
+def process_file(tex, dirname, chapter):
 
     # Read and translate the input
-    tex = open(filename).read()
     htm = tex2htm(tex, chapter)
-
-    # Read the skeleton
-    basedir = os.path.dirname(sys.argv[0])
-    filename = basedir + os.path.sep + 'skeleton.htm'
-    (head, tail) = re.split('CONTENT', open(filename).read())
-    head = re.sub('TITLE', title, head)
-
-
-    head = re.sub('TOC', ''.join(toc), head)
-    global_toc.extend(toc)
-    toc.__init__()
-
-    tail = tail.replace('FOOTNOTES', ''.join(footnotes))
-
-    # Write everything
-    of = open(outfile, 'w')
-    of.write(head)
-    of.write(htm)
-    of.write(tail)
-    of.close()
 
     # Generate any necessary graphics files
     generate_graphics_files(graphics_files, dirname)
     graphics_files.clear()
+    return htm
 
+def relative_path(fn1, fn2):
+    dir1 = os.path.dirname(fn1)
+    dir2 = os.path.dirname(fn2)
+
+    i = 0
+    while i < min(len(dir1), len(dir2)) and dir1[i] == dir2[i]: i+=1
+    dir1 = dir1[i:]
+    dir2 = dir2[i:]
+
+    if not dir1 and not dir2:
+        return os.path.basename(fn2)
+    if not dir1:
+        return dir2 + os.path.sep + os.path.basename(fn2)
+    return ('../'+os.path.sep)*(dir1.count(os.path.sep)+1) \
+              + os.path.basename(dir2)
 
 if __name__ == "__main__":
     # Setup a few things
     setup_environment_handlers()
     setup_command_handlers()
+    ods.setup_environment_handlers(environment_handlers) # TODO: ods specific
+    ods.setup_command_handlers(command_handlers) # TODO: ods specific
 
-    # TODO: ods specific
-    ods.setup_environment_handlers(environment_handlers)
-    ods.setup_command_handlers(command_handlers)
+    # Read common skeleton
+    basedir = os.path.dirname(sys.argv[0])
+    filename = basedir + os.path.sep + 'skeleton.htm'
+    (head, tail) = re.split('CONTENT', open(filename).read())
 
-    # Process all the command line arguments
+    outputfiles = dict()
+
+    # Process all the input files
     chapter = 0
     for filename in sys.argv[1:]:
-        #try:
-        process_file(filename, chapter)
-        chapter += 1
-        #except:
-        #    warn("An error occurred when processing {}".format(filename))
+        texfilename = filename
+        dirname = os.path.dirname(texfilename)
+        base, ext = os.path.splitext(texfilename)
+        htmlfilename = base + '.html'
+        global outputfile
+        outputfile = htmlfilename
+        print("Reading from {}".format(texfilename))
+        tex = open(texfilename, "r").read()
+        content = process_file(tex, dirname, chapter)
 
-    # Create table of contents
+        headx = re.sub('TITLE', title, head)
+        headx = re.sub('TOC', ''.join(toc), headx)
+        global_toc.extend(toc)
+        toc.__init__()
+
+        tailx = tail.replace('FOOTNOTES', ''.join(footnotes))
+
+        outputfiles[htmlfilename] = "".join([headx, content, tailx])
+
+        chapter += 1
+
+    for htmlfilename in outputfiles:
+        outputfiles[htmlfilename] \
+          = finish_crossrefs(htmlfilename, label_map, outputfiles[htmlfilename])
+        print("Writing to {}".format(htmlfilename))
+        of = open(htmlfilename, 'w')
+        of.write(outputfiles[htmlfilename])
+        of.close()
+
+    # Create global table of contents
     title = 'Open Data Structures'
     basedir = os.path.dirname(sys.argv[0])
     filename = basedir + os.path.sep + 'skeleton.htm'
