@@ -11,6 +11,7 @@ from pygments.formatters import HtmlFormatter
 from catlist import catlist
 #catlist = list
 
+import cfg
 import tex2htm
 
 # This is a regular expression I've debugged for doing hash substitutions
@@ -58,17 +59,17 @@ def convert_hashes(tex):
     blocks.append(tex)
     return "".join(blocks)
 
-def setup_command_handlers(command_handlers):
-    command_handlers['codeimport'] =  process_codeimport_cmd
-    command_handlers['javaimport'] =  process_codeimport_cmd
-    command_handlers['etal'] = lambda text, cmd, mode: catlist(["<em>et al</em>"])
-    command_handlers['lang'] = lambda text, cmd, mode: catlist(["Java"])
+def setup_command_handlers(ctx):
+    ctx.command_handlers['codeimport'] =  process_codeimport_cmd
+    ctx.command_handlers['javaimport'] =  process_codeimport_cmd
+    ctx.command_handlers['etal'] = lambda ctx, text, cmd, mode: catlist(["<em>et al</em>"])
+    ctx.command_handlers['lang'] = lambda ctx, text, cmd, mode: catlist(["Java"])
     worthless = ['cpponly']
     for c in worthless:
-        command_handlers[c] = tex2htm.process_cmd_worthless
+        ctx.command_handlers[c] = tex2htm.process_cmd_worthless
     strip = ['javaonly', 'notpcode']
     for c in strip:
-        command_handlers[c] = tex2htm.process_cmd_strip
+        ctx.command_handlers[c] = tex2htm.process_cmd_strip
 
 def get_member(member, clz):
     basedir = os.path.dirname(sys.argv[1]) + os.path.sep + ".." + \
@@ -112,7 +113,7 @@ def get_member(member, clz):
         code.append('// {}'.format(msg))
     return code
 
-def process_codeimport_cmd(tex, cmd, mode):
+def process_codeimport_cmd(ctx, tex, cmd, mode):
     blocks = catlist(['<div class="codeimport">'])
     # blocks.extend(tex2htm.process_recursively(cmd.args[0], mode))
     clz, members = cmd.args[0].split('.', 1)
@@ -124,10 +125,10 @@ def process_codeimport_cmd(tex, cmd, mode):
     blocks.append("</div><!-- codeimport -->")
     return blocks
 
-def setup_environment_handlers(environment_handlers):
-    environment_handlers['hash'] = process_hash_env
+def setup_environment_handlers(ctx):
+    ctx.environment_handlers['hash'] = process_hash_env
 
-def process_hash_env(b, env, mode):
+def process_hash_env(ctx, b, env, mode):
     inner = r'\mathtt{{{}}}'.format(re.sub(r'(^|[^\\])&', r'\1\&', env.content))
     if mode & tex2htm.MATH:
         return catlist([inner])

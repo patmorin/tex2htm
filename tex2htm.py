@@ -10,57 +10,57 @@ from collections import defaultdict
 
 from catlist import catlist
 
-import ods
 
 # TODO: Support for importing subclasses
 # TODO: More parsing cleanup
 # TODO: pageref
 # TODO: Handle brace blocks that are misidentified as arguments
+# TODO: Plot in Figure 1.5
 # TODO: Nicer skeleton
-# TODO: Eliminate globals
 
+import ods
 
-# Some global variables - TODO: Wrap these into a class
-environment_handlers = defaultdict(lambda: process_env_default)
-command_handlers = defaultdict(lambda: process_cmd_default)
+class context(object):
+    def __init__(self):
+        self.environment_handlers = defaultdict(lambda: process_env_default)
+        self.command_handlers = defaultdict(lambda: process_cmd_default)
 
-# Environments that are theorem-like or that have captions should be here
-named_entities = {'chap': 'Chapter',
-                  'sec': 'Section',
-                  'thm': 'Theorem',
-                  'prp': 'Property',
-                  'cor': 'Corollary',
-                  'lem': 'Lemma',
-                  'fig': 'Figure',
-                  'figure': 'Figure',
-                  'eq': 'Equation',
-                  'exc': 'Exercise',
-                  'proof': 'Proof'}
+        # Environments that are theorem-like or that have captions should be here
+        self.named_entities = {'chap': 'Chapter',
+                          'sec': 'Section',
+                          'thm': 'Theorem',
+                          'prp': 'Property',
+                          'cor': 'Corollary',
+                          'lem': 'Lemma',
+                          'fig': 'Figure',
+                          'figure': 'Figure',
+                          'eq': 'Equation',
+                          'exc': 'Exercise',
+                          'proof': 'Proof'}
 
-theoremlike_environments = {'thm', 'lem', 'cor', 'exc', 'prp', 'proof'}
+        self.theoremlike_environments = {'thm', 'lem', 'cor', 'exc', 'prp', 'proof'}
 
-# Map LaTeX labels on to HTML id's
-label_map = dict()
+        # Map LaTeX labels on to HTML id's
+        self.label_map = dict()
 
-# Collections of things to warn about after processing is done
-undefined_labels = set()
-unprocessed_commands = set()
-unprocessed_environments = set()
+        # Collections of things to warn about after processing is done
+        self.undefined_labels = set()
+        self.unprocessed_commands = set()
+        self.unprocessed_environments = set()
 
-# Graphics files to generate after processing is done
-graphics_files = set()
+        # Graphics files to generate after processing is done
+        self.graphics_files = set()
 
-# Used for processing footnotes
-footnote_counter = 0
-footnotes = list()
+        # Used for processing footnotes
+        self.footnote_counter = 0
+        self.footnotes = list()
 
-# Document title
-title = 'Untitled'
-#outputfile
+        # Document title
+        self.title = 'Untitled'
 
-# Table of contents
-global_toc = catlist()
-toc = catlist()
+        # Table of contents
+        self.global_toc = catlist()
+        self.toc = catlist()
 
 # Math mode
 MATH = 1
@@ -102,10 +102,19 @@ def match_parens(tex, i, open, close):
     except IndexError:
         abort("Couldn't match parenthesis:\n... "
               + tex[max(0,i):min(len(tex),i+25)])
+
+id_counter = 0
+def gen_unique_id(prefix=''):
+    global id_counter
+    id_counter += 1
+    if not prefix:
+        prefix = 'tex2htm'
+    return '{}-{}'.format(prefix, id_counter)
+
+
 #
 # Preprocessing functions
 #
-
 def strip_comments(tex):
     lines = tex.splitlines()
     nulled = set()
@@ -126,18 +135,10 @@ def split_paragraphs(tex):
             lines[i] += '<p>'
     return "\n".join(lines)
 
-def add_toc_entry(text, label, name):
-    toc.append('<li>')
-    toc.append(crossref_format.format(label, name, text))
-    toc.append('</li>')
-
-id_counter = 0
-def gen_unique_id(prefix=''):
-    global id_counter
-    id_counter += 1
-    if not prefix:
-        prefix = 'tex2htm'
-    return '{}-{}'.format(prefix, id_counter)
+def add_toc_entry(ctx, text, label, name):
+    ctx.toc.append('<li>')
+    ctx.toc.append(crossref_format.format(label, name, text))
+    ctx.toc.append('</li>')
 
 #
 # Label and Reference Handling
@@ -145,7 +146,7 @@ def gen_unique_id(prefix=''):
 #       and captions is super hacky. Consider using JavaScript to do this,
 #       like here: https://github.com/rauschma/html_demos
 #
-def process_labels(tex, chapter):
+def process_labels(ctx, tex, chapter):
     """ Process all the labels that occur in tex
 
         This works by scanning for commands and environments that alter
@@ -196,15 +197,18 @@ def process_labels(tex, chapter):
             lastlabel = idd
             blocks.append("<a id='{}'></a>".format(idd))
 
-            if name in theoremlike_environments:
-                nicename = named_entities[name]
+            if name in ctx.theoremlike_environments:
+                nicename = ctx.named_entities[name]
                 title = '{}&nbsp;{}'.format(nicename, number)
                 blocks.append(r'\begin{{{}}}[{}]'.format(name, title))
 
         elif m.group(7):
             # This is a labelling command (\thmlabel, \seclabel,...)
-            label = "{}:{}".format(m.group(7), m.group(8))
-            label_map[label] = (outputfile, lastlabel)
+            if m.group(7):
+                label = "{}:{}".format(m.group(7), m.group(8))
+                ctx.label_map[label] = (outputfile, lastlabel)
+            else:
+                # TODO: This is probably the target of a pageref
 
         elif m.group(9):
             # This is a caption command
@@ -213,8 +217,7 @@ def process_labels(tex, chapter):
             number = "{}.{}".format(sec_ctr[0], env_ctr[i])
             idd = "{}:{}".format(name, number)
             lastlabel = idd
-
-            nicename = named_entities[name]
+            nicename = ctx.named_entities[name]
             title = '<span class="title">{}&nbsp;{}</span>'.format(nicename, number)
             text = '{}&emsp;{}'.format(title, cmd.args[0])
             blocks.append(r'\caption{{{}}}'.format(text))
@@ -223,8 +226,12 @@ def process_labels(tex, chapter):
     blocks.append(tex[lastidx:])
     return "".join(blocks)
 
+
+
+
 #
 # LaTeX commands
+#
 class command(object):
     def __init__(self, name, optargs, args, start, end):
         self.name = name
@@ -269,80 +276,87 @@ def next_command(tex, pos):
     return None
 
 
-def setup_command_handlers():
-    command_handlers['chapter'] =  process_chapter_cmd
-    command_handlers['section'] =  process_section_cmd
-    command_handlers['subsection'] =  process_subsection_cmd
-    command_handlers['subsubsection'] =  process_subsubsection_cmd
-    command_handlers['paragraph'] =  process_paragraph_cmd
-    command_handlers['emph'] =  process_emph_cmd
-    command_handlers['textbf'] =  process_textbf_cmd
-    command_handlers['texttt'] =  process_texttt_cmd
-    command_handlers['caption'] =  process_caption_cmd
-    command_handlers['includegraphics'] =  process_graphics_cmd
-    command_handlers['cite'] =  process_cite_cmd
-    command_handlers['newblock'] =  lambda t, c, m: catlist(['<br>'])
-    command_handlers['ldots'] =  process_dots_cmd
-    command_handlers['footnote'] = process_footnote_cmd
-    command_handlers['centering'] = process_centering_cmd
-    command_handlers['href'] = process_href_cmd
-    command_handlers['url'] = process_url_cmd
-    command_handlers['path'] = process_path_cmd
+def setup_command_handlers(ctx):
+    ctx.command_handlers['chapter'] =  process_chapter_cmd
+    ctx.command_handlers['section'] =  process_section_cmd
+    ctx.command_handlers['subsection'] =  process_subsection_cmd
+    ctx.command_handlers['subsubsection'] =  process_subsubsection_cmd
+    ctx.command_handlers['paragraph'] =  process_paragraph_cmd
+    ctx.command_handlers['emph'] =  process_emph_cmd
+    ctx.command_handlers['textbf'] =  process_textbf_cmd
+    ctx.command_handlers['texttt'] =  process_texttt_cmd
+    ctx.command_handlers['caption'] =  process_caption_cmd
+    ctx.command_handlers['includegraphics'] =  process_graphics_cmd
+    ctx.command_handlers['cite'] =  process_cite_cmd
+    ctx.command_handlers['ldots'] =  process_dots_cmd
+    ctx.command_handlers['footnote'] = process_footnote_cmd
+    ctx.command_handlers['centering'] = process_centering_cmd
+    ctx.command_handlers['href'] = process_href_cmd
+    ctx.command_handlers['url'] = process_url_cmd
+    ctx.command_handlers['path'] = process_path_cmd
+
+    ctx.command_handlers['newblock'] = process_cmd_strip
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
                  'end', 'hline', 'noindent', 'pagenumbering', 'linewidth',
                  'newcommand', 'resizebox', 'setcounter', 'multicolumn']
     for c in worthless:
-        command_handlers[c] = process_cmd_worthless
+        ctx.command_handlers[c] = process_cmd_worthless
 
-    labeltypes = ['', 'fig', 'Fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec', 'thm']
+    labeltypes = ['', 'fig', 'Fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec',
+                  'thm', 'page']
     for t in labeltypes:
-        command_handlers[t + 'label'] = process_cmd_worthless
-        command_handlers[t + 'ref'] = process_ref_cmd
+        ctx.command_handlers[t + 'label'] = process_cmd_worthless
+        ctx.command_handlers[t + 'ref'] = process_ref_cmd
 
     # TODO: Find an exhaustive list of these
     mathbreakers = ['mbox', 'text']
     for c in mathbreakers:
-        command_handlers[c] = process_mathbreaker_cmd
+        ctx.command_handlers[c] = process_mathbreaker_cmd
 
-def process_cmd_default(tex, cmd, mode):
+def process_cmd_default(ctx, tex, cmd, mode):
     """ By default, we just pass commands through untouched """
     if not (mode & MATH):
-        unprocessed_commands.add(cmd.name)
-    return process_cmd_passthru(tex, cmd, mode)
+        ctx.unprocessed_commands.add(cmd.name)
+    return process_cmd_passthru(ctx, tex, cmd, mode)
 
-def process_cmd_passthru(tex, cmd, mode):
+def process_cmd_passthru(ctx, tex, cmd, mode):
     blocks = catlist([r'\{}'.format(cmd.name)])
     for a in cmd.optargs:
         blocks.append('[')
-        blocks.extend(process_recursively(a, mode))
+        blocks.extend(process_recursively(ctx, a, mode))
         blocks.append(']')
     for a in cmd.args:
         blocks.append('{')
-        blocks.extend(process_recursively(a, mode))
+        blocks.extend(process_recursively(ctx, a, mode))
         blocks.append('}')
     return blocks
 
-def process_cmd_worthless(tex, cmd, mode):
+def process_cmd_worthless(ctx, tex, cmd, mode):
     """ Worthless commands and arguments are completely removed """
     return catlist()
 
-def process_cmd_strip(text, cmd, mode):
+def process_cmd_strip(ctx, text, cmd, mode):
     """ These commands have their arguments processed """
-    return process_recursively(cmd.args[0], mode)
+    blocks = catlist()
+    for a in cmd.args:
+        blocks.extend(process_recursively(ctx, a, mode))
+    return blocks
 
-def process_mathbreaker_cmd(text, cmd, mode):
+def process_mathbreaker_cmd(ctx, text, cmd, mode):
     """ These command break out of math mode """
-    return process_cmd_passthru(text, cmd, mode & ~MATH)
+    if mode & MATH:
+        return process_cmd_passthru(ctx, text, cmd, mode & ~MATH)
+    return process_cmd_strip(ctx, text, cmd, mode)
 
-def process_path_cmd(tex, cmd, mode):
+def process_path_cmd(ctx, tex, cmd, mode):
     return catlist(['<span class="path">{}</span>'.format(cmd.args[0])])
 
-def process_dots_cmd(tex, cmd, mode):
+def process_dots_cmd(ctx, tex, cmd, mode):
     """ Various kinds of ellipses """
     if mode & MATH:
-        return process_cmd_default(tex, cmd, mode)
+        return process_cmd_default(ctx, tex, cmd, mode)
     else:
         mapper = { 'ldots': '&hellip;',
                 'vdots': '&#x22ee;' }
@@ -351,126 +365,124 @@ def process_dots_cmd(tex, cmd, mode):
     warn("Unrecognized non-math dots: {}".format(cmd.name))
     return catlist([ '?' ])
 
-def process_chapter_cmd(text, cmd, mode):
+def process_chapter_cmd(ctx, text, cmd, mode):
     global title
     title = cmd.args[0]
     blocks = catlist()
     ident = gen_unique_id()
     blocks.append('<div id="{}" class="chapter">'.format(ident))
-    htmlblocks = process_recursively(cmd.args[0], mode)
-    add_toc_entry(''.join(htmlblocks), ident, 'chap')
-    label_map[ident] = outputfile, ''.join(htmlblocks)
+    htmlblocks = process_recursively(ctx, cmd.args[0], mode)
+    add_toc_entry(ctx, ''.join(htmlblocks), ident, 'chap')
+    ctx.label_map[ident] = outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
 
-def process_section_cmd(text, cmd, mode):
+def process_section_cmd(ctx, text, cmd, mode):
     ident = gen_unique_id()
     blocks = catlist(['<h1 id="{}">'.format(ident)])
-    htmlblocks = process_recursively(cmd.args[0], mode)
-    add_toc_entry(''.join(htmlblocks), ident, 'sec')
-    label_map[ident] = outputfile, ''.join(htmlblocks)
+    htmlblocks = process_recursively(ctx, cmd.args[0], mode)
+    add_toc_entry(ctx, ''.join(htmlblocks), ident, 'sec')
+    ctx.label_map[ident] = outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append("</h1>")
     return blocks
 
-def process_subsection_cmd(text, cmd, mode):
+def process_subsection_cmd(ctx, text, cmd, mode):
     blocks = catlist(["<h2>"])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</h2>")
     return blocks
 
-def process_subsubsection_cmd(text, cmd, mode):
+def process_subsubsection_cmd(ctx, text, cmd, mode):
     blocks = catlist(["<h2>"])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</h2>")
     return blocks
 
-def process_paragraph_cmd(text, cmd, mode):
+def process_paragraph_cmd(ctx, text, cmd, mode):
     blocks = catlist(['<div class="paragraph_title">'])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</div><!-- paragraph_title -->")
     return blocks
 
-def process_emph_cmd(text, cmd, mode):
+def process_emph_cmd(ctx, text, cmd, mode):
     blocks = catlist(["<em>"])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</em>")
     return blocks
 
-def process_textbf_cmd(text, cmd, mode):
+def process_textbf_cmd(ctx, text, cmd, mode):
     blocks = catlist(["<span class='bf'>"])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</span>")
     return blocks
 
-def process_texttt_cmd(text, cmd, mode):
+def process_texttt_cmd(ctx, text, cmd, mode):
     blocks = catlist(["<span class='tt'>"])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</span>")
     return blocks
 
-def process_caption_cmd(text, cmd, mode):
+def process_caption_cmd(ctx, text, cmd, mode):
     blocks = catlist(['<div class="caption">'])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</div><!-- caption -->")
     return blocks
 
-def process_graphics_cmd(text, cmd, mode):
+def process_graphics_cmd(ctx, text, cmd, mode):
     filename = "{}.svg".format(cmd.args[0])
-    graphics_files.add(filename)
+    ctx.graphics_files.add(filename)
     return catlist(['<span class="imgwrap"><img class="includegraphics" src="{}"/></span>'.format(filename)])
 
-def process_centering_cmd(text, cmd, mode):
+def process_centering_cmd(ctx, text, cmd, mode):
     blocks = catlist(['<div class="centering">'])
-    blocks.extend(process_recursively(cmd.args[0], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</div><!-- caption -->")
     return blocks
 
-def process_footnote_cmd(tex, cmd, mode):
-    global footnote_counter
+def process_footnote_cmd(ctx, tex, cmd, mode):
     blocks = catlist()
-    footnote_counter += 1
-    blocks.append('<a class="ptr">({})</a>'.format(footnote_counter))
-    fntext = ''.join(process_recursively(cmd.args[0], mode))
-    footnotes.append('<li>{}</li>'.format(fntext))
+    ctx.footnote_counter += 1
+    blocks.append('<a class="ptr">({})</a>'.format(ctx.footnote_counter))
+    fntext = ''.join(process_recursively(ctx, cmd.args[0], mode))
+    ctx.footnotes.append('<li>{}</li>'.format(fntext))
     return blocks
 
-def process_url_cmd(tex, cmd, mode):
+def process_url_cmd(ctx, tex, cmd, mode):
     return catlist(["<a href='{url}'>{url}</a>".format(url=cmd.args[0])])
 
-def process_href_cmd(tex, cmd, mode):
+def process_href_cmd(ctx, tex, cmd, mode):
     blocks = catlist(["<a href='{}'>".format(cmd.args[0])])
-    blocks.extend(process_recursively(cmd.args[1], mode))
+    blocks.extend(process_recursively(ctx, cmd.args[1], mode))
     blocks.append("</a>")
     return blocks
 
-def crossref_text(name, texlabel, default=''):
-    if texlabel not in label_map:
+def crossref_text(ctx, name, texlabel, default=''):
+    if texlabel not in ctx.label_map:
         return default
-    f, htmllabel = label_map[texlabel]
+    f, htmllabel = ctx.label_map[texlabel]
     num = htmllabel[htmllabel.find(':')+1:]
     if name == 'cite':
         return num
-    if name in named_entities:
-        return "{}&nbsp;{}".format(named_entities[name], num)
+    if name in ctx.named_entities:
+        return "{}&nbsp;{}".format(ctx.named_entities[name], num)
     warn("Using unnamed reference type: {}".format(name))
     return "{}&nbsp;{}".format(name, num)
 
 
-def process_ref_cmd(tex, cmd, mode):
+def process_ref_cmd(ctx, tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
     texlabel = "{}:{}".format(name, cmd.args[0])
-    text = crossref_text(name, texlabel)
+    text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
     return catlist([html])
 
-def process_cite_cmd(tex, cmd, mode):
+def process_cite_cmd(ctx, tex, cmd, mode):
     blocks = catlist(['['])
     args = [s.strip() for s in cmd.args[0].split(',')]
-    texlabels = ["cite:{}".format(a) for a in args]
-    htmls = [crossref_format.format(texlabel,'cite',texlabel) \
-                for texlabel in texlabels]
+    htmls = [crossref_format.format("cite:{}".format(a), 'cite', '') \
+                for a in args]
     blocks.append(",".join(htmls))
     blocks.append(']')
     return blocks
@@ -495,22 +507,22 @@ class environment(object):
                                                     repr(self.start),
                                                     repr(self.end))
 
-def setup_environment_handlers():
-    environment_handlers['dollar'] = process_inlinemath_env
-    environment_handlers['tabular'] = process_tabular_env
+def setup_environment_handlers(ctx):
+    ctx.environment_handlers['dollar'] = process_inlinemath_env
+    ctx.environment_handlers['tabular'] = process_tabular_env
     displaymaths = ['equation', 'equation*', 'align', 'align*', 'eqnarray*']
     for name in displaymaths:
-        environment_handlers[name] = process_displaymath_env
+        ctx.environment_handlers[name] = process_displaymath_env
     passthroughs = ['array', 'cases']
     for name in passthroughs:
-        environment_handlers[name] = process_env_passthru
+        ctx.environment_handlers[name] = process_env_passthru
     lists = ['itemize', 'enumerate', 'list', 'description']
     for name in lists:
-        environment_handlers[name] = process_list_env
-    for name in theoremlike_environments:
-        environment_handlers[name] = process_theoremlike_env
-    environment_handlers['center'] = process_center_env
-    environment_handlers['thebibliography'] = process_thebibliography_env
+        ctx.environment_handlers[name] = process_list_env
+    for name in ctx.theoremlike_environments:
+        ctx.environment_handlers[name] = process_theoremlike_env
+    ctx.environment_handlers['center'] = process_center_env
+    ctx.environment_handlers['thebibliography'] = process_thebibliography_env
 
 def get_environment(tex, begincmd):
     """ Get an environment that is started by begincmd.
@@ -541,22 +553,22 @@ def get_environment(tex, begincmd):
     return environment(name, optargs, args,
                        tex[pos0:m.start()], begincmd.start, m.end())
 
-def process_env_passthru(b, env, mode):
+def process_env_passthru(ctx, b, env, mode):
     blocks = catlist([r'\begin{{{}}}'.format(env.name)])
-    blocks.extend(process_recursively(env.content, mode))
+    blocks.extend(process_recursively(ctx, env.content, mode))
     blocks.append(r'\end{{{}}}'.format(env.name))
     return blocks
 
-def process_displaymath_env(b, env, mode):
-    return process_env_passthru(b, env, mode | MATH)
+def process_displaymath_env(ctx, b, env, mode):
+    return process_env_passthru(ctx, b, env, mode | MATH)
 
-def process_inlinemath_env(b, env, mode):
+def process_inlinemath_env(ctx, b, env, mode):
     blocks = catlist([r'\('])
-    blocks.extend(process_recursively(env.content, mode | MATH))
+    blocks.extend(process_recursively(ctx, env.content, mode | MATH))
     blocks.append(r'\)')
     return blocks
 
-def process_thebibliography_env(b, env, mode):
+def process_thebibliography_env(ctx, b, env, mode):
     env.content = re.sub('{thebibliography}', '{enumerate}', env.content)
     blocks = catlist()
     ref = 1
@@ -568,25 +580,25 @@ def process_thebibliography_env(b, env, mode):
         texlabel = "cite:{}".format(m.group(1))
         htmllabel = 'cite:{}'.format(ref)
         ref += 1
-        label_map[texlabel] = (outputfile, htmllabel)
+        ctx.label_map[texlabel] = (outputfile, htmllabel)
         blocks.append(r'<a id="{}"</a>'.format(htmllabel))
         blocks.append(r'\item')
     blocks.append(env.content[i:])
     env.content = "".join(blocks)
     # env.content = re.sub(r'\\bibitem\s*{(\w+)}', r'\item', env.content)
-    blocks = process_list_env(b, env, mode)
-    txt = "".join(b for b in blocks)
+    blocks = process_list_env(ctx, b, env, mode)
+    txt = "".join([b for b in blocks])
     # bibtex-generated bibliographies are full of superfluous braces
     txt = re.sub(r'{([^}]*)}', r'\1', txt)
     return catlist([txt])
 
-def process_list_env(b, env, mode):
+def process_list_env(ctx, b, env, mode):
     newblocks = catlist()
     mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul'),
                    ('thebibliography', 'ol'), ('description', 'ul')])
     tag = mapper[env.name]
     newblocks.append('<{} class="{}">'.format(tag, env.name))
-    newblocks.extend(process_recursively(process_list_items(env.content), mode))
+    newblocks.extend(process_recursively(ctx, process_list_items(env.content), mode))
     newblocks.append('</li></{}>'.format(tag))
     return newblocks
 
@@ -597,9 +609,9 @@ def process_list_items(b):
     b = re.sub(r'\s*' + '\2' + r'\s*', '</li>', b, 0, re.M|re.S)
     return b
 
-def process_tabular_env(tex, env, mode):
+def process_tabular_env(ctx, tex, env, mode):
     # TODO: use a catlist of strings instead
-    inner = "".join(process_recursively(env.content, mode))
+    inner = "".join(process_recursively(ctx, env.content, mode))
     rows = re.split(r'\\\\', inner)
     rows = [re.split(r'\&', r) for r in rows]
     table = '<table align="center">'
@@ -611,38 +623,38 @@ def process_tabular_env(tex, env, mode):
     table += '</table>'
     return catlist([table])
 
-def process_theoremlike_env(tex, env, mode):
+def process_theoremlike_env(ctx, tex, env, mode):
     newblocks = catlist(['<div class="{}">'.format(env.name)])
     if env.optargs:
         title = env.optargs[0]
-    elif env.name in named_entities:
-        title = named_entities[env.name]
+    elif env.name in ctx.named_entities:
+        title = ctx.named_entities[env.name]
     else:
         title = ''
     newblocks.append('<span class="title">{}</span>'.format(title))
 
-    newblocks.extend(process_recursively(env.content, mode))
+    newblocks.extend(process_recursively(ctx, env.content, mode))
     newblocks.append('</div><!-- {} -->'.format(env.name))
     return newblocks
 
-def process_center_env(tex, env, mode):
+def process_center_env(ctx, tex, env, mode):
     newblocks = catlist(['<div class="{}">'.format(env.name)])
-    newblocks.extend(process_recursively(env.content, mode))
+    newblocks.extend(process_recursively(ctx, env.content, mode))
     newblocks.append('</div><!-- {} -->'.format(env.name))
     return newblocks
 
-def process_env_default(tex, env, mode):
+def process_env_default(ctx, tex, env, mode):
     if not mode & MATH:
-        unprocessed_environments.add(env.name)
+        ctx.unprocessed_environments.add(env.name)
     newblocks = catlist(['<div class="{}">'.format(env.name)])
-    newblocks.extend(process_recursively(env.content, mode))
+    newblocks.extend(process_recursively(ctx, env.content, mode))
     newblocks.append('</div><!-- {} -->'.format(env.name))
     return newblocks
 
 #
 # The main processing loop
 #
-def process_recursively(tex, mode):
+def process_recursively(ctx, tex, mode):
     newblocks = catlist()
     lastidx = 0
     cmd = next_command(tex, lastidx)
@@ -651,10 +663,10 @@ def process_recursively(tex, mode):
         if cmd.name == 'begin':
             env = get_environment(tex, cmd)
             lastidx = env.end
-            newblocks.extend(environment_handlers[env.name](tex, env, mode))
+            newblocks.extend(ctx.environment_handlers[env.name](ctx, tex, env, mode))
         else:
             lastidx = cmd.end
-            newblocks.extend(command_handlers[cmd.name](tex, cmd, mode))
+            newblocks.extend(ctx.command_handlers[cmd.name](ctx, tex, cmd, mode))
         cmd = next_command(tex, lastidx)
     newblocks.append(tex[lastidx:])
     return newblocks
@@ -665,7 +677,7 @@ def cleanup_oldschool(tex):
     tex = re.sub(r'{\s*\\bf', r'\\textbf{', tex)
     tex = re.sub(r"``", '“', tex)
     tex = re.sub(r"''", '”', tex)
-
+    # TODO: Do something about single-quotes
     return tex
 
 def cleanup_accented_chars(tex):
@@ -689,7 +701,7 @@ def cleanup_accented_chars(tex):
                                                                  m.start()+8)]))
     return tex
 
-def tex2htm(tex, chapter):
+def tex2htm(ctx, tex, chapter):
     # Some preprocessing
     tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
@@ -706,9 +718,9 @@ def tex2htm(tex, chapter):
     tex = re.sub(r'--', r'&ndash;', tex)
     tex = ods.convert_hashes(tex) # TODO: ods specific
 
-    tex = process_labels(tex, chapter)
+    tex = process_labels(ctx, tex, chapter)
 
-    blocks = process_recursively(tex, 0)
+    blocks = process_recursively(ctx, tex, 0)
 
     return "".join(blocks)
 
@@ -747,7 +759,7 @@ def finish_crossrefs(filename, label_map, html):
         name = m.group(3)
         text = m.group(4)
         if texlabel not in label_map:
-            undefined_labels.add(texlabel)
+            ctx.undefined_labels.add(texlabel)
             blocks.append('<span class="error">REFERR:{}</span>'.format(texlabel))
         else:
             f, ell = label_map[texlabel]
@@ -756,19 +768,18 @@ def finish_crossrefs(filename, label_map, html):
             else:
                 htmllabel = "{}#{}".format(relative_path(filename, f), ell)
             if not text:
-                text = crossref_text(name, texlabel)
+                text = crossref_text(ctx, name, texlabel)
             blocks.append('<a href="{}">{}</a>'.format(htmllabel, text))
     blocks.append(html[i:])
     return "".join(blocks)
 
-def process_file(tex, dirname, chapter):
-
+def process_file(ctx, tex, dirname, chapter):
     # Read and translate the input
-    htm = tex2htm(tex, chapter)
+    htm = tex2htm(ctx, tex, chapter)
 
     # Generate any necessary graphics files
-    generate_graphics_files(graphics_files, dirname)
-    graphics_files.clear()
+    generate_graphics_files(ctx.graphics_files, dirname)
+    ctx.graphics_files.clear()
     return htm
 
 def relative_path(fn1, fn2):
@@ -789,10 +800,11 @@ def relative_path(fn1, fn2):
 
 if __name__ == "__main__":
     # Setup a few things
-    setup_environment_handlers()
-    setup_command_handlers()
-    ods.setup_environment_handlers(environment_handlers) # TODO: ods specific
-    ods.setup_command_handlers(command_handlers) # TODO: ods specific
+    ctx = context()
+    setup_environment_handlers(ctx)
+    setup_command_handlers(ctx)
+    ods.setup_environment_handlers(ctx) # TODO: ods specific
+    ods.setup_command_handlers(ctx) # TODO: ods specific
 
     # TODO: Use a better default, or specify on command line
     outputdir = os.path.dirname(sys.argv[1])
@@ -815,23 +827,24 @@ if __name__ == "__main__":
         outputfile = htmlfilename
         print("Reading from {}".format(texfilename))
         tex = open(texfilename, "r").read()
-        content = process_file(tex, dirname, chapter)
+        content = process_file(ctx, tex, dirname, chapter)
 
-        headx = re.sub('TITLE', title, head)
-        headx = re.sub('TOC', ''.join(toc), headx)
-        global_toc.extend(toc)
-        toc.__init__()
+        headx = re.sub('TITLE', ctx.title, head)
+        headx = re.sub('TOC', ''.join(ctx.toc), headx)
+        ctx.global_toc.extend(ctx.toc)
+        ctx.toc.__init__()
 
-        tailx = tail.replace('FOOTNOTES', ''.join(footnotes))
-        footnotes.clear()
+        tailx = tail.replace('FOOTNOTES', ''.join(ctx.footnotes))
+        ctx.footnotes.clear()
 
         outputfiles[htmlfilename] = "".join([headx, content, tailx])
 
         chapter += 1
 
     for htmlfilename in outputfiles:
-        outputfiles[htmlfilename] \
-          = finish_crossrefs(htmlfilename, label_map, outputfiles[htmlfilename])
+        outputfiles[htmlfilename] = finish_crossrefs(htmlfilename,
+                                                     ctx.label_map,
+                                                     outputfiles[htmlfilename])
         print("Writing to {}".format(htmlfilename))
         of = open(htmlfilename, 'w')
         of.write(outputfiles[htmlfilename])
@@ -842,21 +855,21 @@ if __name__ == "__main__":
     headx = re.sub('TITLE', title, head)
     print("="*50)
     tocfile = outputdir + os.path.sep + 'toc.html'
-    tochtml = finish_crossrefs(tocfile, label_map, "".join(global_toc))
+    tochtml = finish_crossrefs(tocfile, ctx.label_map, "".join(ctx.global_toc))
     headx = re.sub('TOC', tochtml, headx)
-    tailx = tail.replace('FOOTNOTES', ''.join(footnotes))
+    tailx = tail.replace('FOOTNOTES', '')
     fp = open(tocfile, 'w')
     fp.write(headx)
     fp.write(tailx)
     fp.close()
 
     # Print warnings
-    if undefined_labels:
-        labels = ", ".join(sorted(undefined_labels))
+    if ctx.undefined_labels:
+        labels = ", ".join(sorted(ctx.undefined_labels))
         warn("Undefined labels: {}".format(labels))
-    if unprocessed_commands:
-        commands = ", ".join(sorted(unprocessed_commands))
+    if ctx.unprocessed_commands:
+        commands = ", ".join(sorted(ctx.unprocessed_commands))
         warn("Unprocessed commands: {}".format(commands))
-    if unprocessed_environments:
-        environments = ", ".join(sorted(unprocessed_environments))
+    if ctx.unprocessed_environments:
+        environments = ", ".join(sorted(ctx.unprocessed_environments))
         warn("Defaulted environments: {}".format(environments))

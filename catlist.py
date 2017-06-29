@@ -53,7 +53,7 @@ class catlist(object):
 
     def __str__(self):
         assert(not self.dead)
-        return "〈{}〉)".format(",".join([str(x) for x in self]))
+        return "〈{}〉)".format(",".join([repr(x) for x in self]))
 
     def __repr__(self):
         assert(not self.dead)
