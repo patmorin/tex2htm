@@ -71,7 +71,8 @@ def setup_command_handlers(command_handlers):
         command_handlers[c] = tex2htm.process_cmd_strip
 
 def get_member(member, clz):
-    basedir = os.path.dirname(sys.argv[1]) + os.path.sep + 'java'
+    basedir = os.path.dirname(sys.argv[1]) + os.path.sep + ".." + \
+                  os.path.sep + 'java'
     filename = basedir+os.path.sep+clz+'.java' # FIXME: hard-coded
     code = catlist()
     d = 0

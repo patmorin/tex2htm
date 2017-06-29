@@ -8,7 +8,9 @@ if __name__ == "__main__":
               'binarytrees', 'rbs', 'scapegoat', 'redblack', 'heaps', 'sorting',
               'graphs', 'integers', 'btree'
               ]
-    texfiles = ['ods' + os.path.sep + f + '.tex' for f in texfiles]
-    texfiles.append('ods/ods.bbl')
+    texfiles = [f+'.tex' for f in texfiles]
+    texfiles.append('ods-java.bbl')
+    basedir = '/home/morin/remote/public_html/ods/newhtml/ods/latex'
+    texfiles = [basedir + os.path.sep + f for f in texfiles]
 
     subprocess.call(['./tex2htm.py'] + texfiles)

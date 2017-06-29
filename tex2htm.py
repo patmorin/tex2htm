@@ -16,6 +16,8 @@ import ods
 # TODO: More parsing cleanup
 # TODO: pageref
 # TODO: Handle brace blocks that are misidentified as arguments
+# TODO: Nicer skeleton
+# TODO: Eliminate globals
 
 
 # Some global variables - TODO: Wrap these into a class
@@ -62,6 +64,11 @@ toc = catlist()
 
 # Math mode
 MATH = 1
+
+
+# We make internal labels that look like this
+crossref_format = 'CROSSREF〈{}|{}|{}〉'
+crossref_rx = re.compile(r'CROSSREF〈((\w|:|-)+)\|(\w+)\|([^〉]*)〉')
 
 #
 # Utilities
@@ -119,8 +126,10 @@ def split_paragraphs(tex):
             lines[i] += '<p>'
     return "\n".join(lines)
 
-def add_toc_entry(txt, id):
-    toc.append('<li><a href="#{}">{}</a></li>'.format(id, txt))
+def add_toc_entry(text, label, name):
+    toc.append('<li>')
+    toc.append(crossref_format.format(label, name, text))
+    toc.append('</li>')
 
 id_counter = 0
 def gen_unique_id(prefix=''):
@@ -349,7 +358,8 @@ def process_chapter_cmd(text, cmd, mode):
     ident = gen_unique_id()
     blocks.append('<div id="{}" class="chapter">'.format(ident))
     htmlblocks = process_recursively(cmd.args[0], mode)
-    add_toc_entry(''.join(htmlblocks), ident)
+    add_toc_entry(''.join(htmlblocks), ident, 'chap')
+    label_map[ident] = outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
@@ -358,7 +368,8 @@ def process_section_cmd(text, cmd, mode):
     ident = gen_unique_id()
     blocks = catlist(['<h1 id="{}">'.format(ident)])
     htmlblocks = process_recursively(cmd.args[0], mode)
-    add_toc_entry(''.join(htmlblocks), ident)
+    add_toc_entry(''.join(htmlblocks), ident, 'sec')
+    label_map[ident] = outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append("</h1>")
     return blocks
@@ -434,17 +445,32 @@ def process_href_cmd(tex, cmd, mode):
     blocks.append("</a>")
     return blocks
 
+def crossref_text(name, texlabel, default=''):
+    if texlabel not in label_map:
+        return default
+    f, htmllabel = label_map[texlabel]
+    num = htmllabel[htmllabel.find(':')+1:]
+    if name == 'cite':
+        return num
+    if name in named_entities:
+        return "{}&nbsp;{}".format(named_entities[name], num)
+    warn("Using unnamed reference type: {}".format(name))
+    return "{}&nbsp;{}".format(name, num)
+
+
 def process_ref_cmd(tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
     texlabel = "{}:{}".format(name, cmd.args[0])
-    html = 'CROSSREF{}XXX{}YYY'.format(texlabel, name)
+    text = crossref_text(name, texlabel)
+    html = crossref_format.format(texlabel, name, text)
     return catlist([html])
 
 def process_cite_cmd(tex, cmd, mode):
     blocks = catlist(['['])
     args = [s.strip() for s in cmd.args[0].split(',')]
     texlabels = ["cite:{}".format(a) for a in args]
-    htmls = ['CROSSREF{}XXXciteYYY'.format(texlabel) for texlabel in texlabels]
+    htmls = [crossref_format.format(texlabel,'cite',texlabel) \
+                for texlabel in texlabels]
     blocks.append(",".join(htmls))
     blocks.append(']')
     return blocks
@@ -637,8 +663,8 @@ def cleanup_oldschool(tex):
     # Cleanup some old school tex font control
     tex = re.sub(r'{\s*\\em', r'\\emph{', tex)
     tex = re.sub(r'{\s*\\bf', r'\\textbf{', tex)
-    tex = re.sub(r"``", r'<q>', tex)
-    tex = re.sub(r"''", r'</q>', tex)
+    tex = re.sub(r"``", '“', tex)
+    tex = re.sub(r"''", '”', tex)
 
     return tex
 
@@ -714,34 +740,26 @@ def generate_graphics_files(filenames, basedir):
 def finish_crossrefs(filename, label_map, html):
     blocks = catlist()
     i = 0
-    rx = re.compile(r'CROSSREF((\w|:)+)XXX(\w+)YYY')
-    for m in rx.finditer(html):
+    for m in crossref_rx.finditer(html):
         blocks.append(html[i:m.start()])
         i = m.end()
         texlabel = m.group(1)
         name = m.group(3)
-        if texlabel in label_map:
+        text = m.group(4)
+        if texlabel not in label_map:
+            undefined_labels.add(texlabel)
+            blocks.append('<span class="error">REFERR:{}</span>'.format(texlabel))
+        else:
             f, ell = label_map[texlabel]
             if filename == f:
                 htmllabel = "#{}".format(ell)
             else:
                 htmllabel = "{}#{}".format(relative_path(filename, f), ell)
-            num = htmllabel[htmllabel.find(':')+1:]
-        else:
-            undefined_labels.add(texlabel)
-            htmllabel = '#REFERR'
-            num = '??'
-        if name == 'cite':
-            blocks.append('<a href="{}">{}</a>'.format(htmllabel, num))
-        elif name in named_entities:
-            blocks.append('<a href="{}">{}&nbsp;{}</a>'.format(htmllabel,
-                               named_entities[name], num))
-        else:
-            blocks.append('<a href="{}">{}&nbsp;{}</a>'.format(htmllabel,
-                                name, num))
+            if not text:
+                text = crossref_text(name, texlabel)
+            blocks.append('<a href="{}">{}</a>'.format(htmllabel, text))
     blocks.append(html[i:])
     return "".join(blocks)
-
 
 def process_file(tex, dirname, chapter):
 
@@ -776,6 +794,9 @@ if __name__ == "__main__":
     ods.setup_environment_handlers(environment_handlers) # TODO: ods specific
     ods.setup_command_handlers(command_handlers) # TODO: ods specific
 
+    # TODO: Use a better default, or specify on command line
+    outputdir = os.path.dirname(sys.argv[1])
+
     # Read common skeleton
     basedir = os.path.dirname(sys.argv[0])
     filename = basedir + os.path.sep + 'skeleton.htm'
@@ -802,6 +823,7 @@ if __name__ == "__main__":
         toc.__init__()
 
         tailx = tail.replace('FOOTNOTES', ''.join(footnotes))
+        footnotes.clear()
 
         outputfiles[htmlfilename] = "".join([headx, content, tailx])
 
@@ -817,16 +839,15 @@ if __name__ == "__main__":
 
     # Create global table of contents
     title = 'Open Data Structures'
-    basedir = os.path.dirname(sys.argv[0])
-    filename = basedir + os.path.sep + 'skeleton.htm'
-    (head, tail) = re.split('CONTENT', open(filename).read())
-    head = re.sub('TITLE', title, head)
-    head = re.sub('TOC', ''.join(global_toc), head)
-
-    tocfile = 'toc.html'
+    headx = re.sub('TITLE', title, head)
+    print("="*50)
+    tocfile = outputdir + os.path.sep + 'toc.html'
+    tochtml = finish_crossrefs(tocfile, label_map, "".join(global_toc))
+    headx = re.sub('TOC', tochtml, headx)
+    tailx = tail.replace('FOOTNOTES', ''.join(footnotes))
     fp = open(tocfile, 'w')
-    fp.write(head)
-    fp.write(tail)
+    fp.write(headx)
+    fp.write(tailx)
     fp.close()
 
     # Print warnings
