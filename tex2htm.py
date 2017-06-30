@@ -17,6 +17,9 @@ from catlist import catlist
 # TODO: Handle brace blocks that are misidentified as arguments
 # TODO: Plot in Figure 1.5
 # TODO: Nicer skeleton
+# TODO: Support for \verb
+# TODO: Handle \\ (but only outside of math environments)
+# Figure 1.5
 
 import ods
 
@@ -67,6 +70,7 @@ MATH = 1
 
 
 # We make internal labels that look like this
+# CROSSREF〈texlabel|name|text〉
 crossref_format = 'CROSSREF〈{}|{}|{}〉'
 crossref_rx = re.compile(r'CROSSREF〈((\w|:|-)+)\|(\w+)\|([^〉]*)〉')
 
@@ -111,6 +115,10 @@ def gen_unique_id(prefix=''):
         prefix = 'tex2htm'
     return '{}-{}'.format(prefix, id_counter)
 
+def text_sample(txt):
+    if len(txt) < 50:
+        return txt
+    return txt[:20] + '...' + txt[-20:]
 
 #
 # Preprocessing functions
@@ -137,6 +145,7 @@ def split_paragraphs(tex):
 
 def add_toc_entry(ctx, text, label, name):
     ctx.toc.append('<li>')
+    print(crossref_format.format(label, name, text))
     ctx.toc.append(crossref_format.format(label, name, text))
     ctx.toc.append('</li>')
 
@@ -202,6 +211,8 @@ def process_labels(ctx, tex, chapter):
                 nicename = ctx.named_entities[name]
                 title = '{}&nbsp;{}'.format(nicename, number)
                 blocks.append(r'\begin{{{}}}[{}]'.format(name, title))
+            else:
+                blocks.append(r'\begin{{{}}}'.format(name))
 
         elif m.group(6):
             # This is a labelling command (\thmlabel, \seclabel,...)
@@ -286,9 +297,9 @@ def setup_command_handlers(ctx):
     ctx.command_handlers['subsection'] =  process_subsection_cmd
     ctx.command_handlers['subsubsection'] =  process_subsubsection_cmd
     ctx.command_handlers['paragraph'] =  process_paragraph_cmd
-    ctx.command_handlers['emph'] =  process_emph_cmd
-    ctx.command_handlers['textbf'] =  process_textbf_cmd
-    ctx.command_handlers['texttt'] =  process_texttt_cmd
+    ctx.command_handlers['emph'] =  process_cmd_span
+    ctx.command_handlers['textbf'] =  process_cmd_span
+    ctx.command_handlers['texttt'] =  process_cmd_span
     ctx.command_handlers['caption'] =  process_caption_cmd
     ctx.command_handlers['includegraphics'] =  process_graphics_cmd
     ctx.command_handlers['cite'] =  process_cite_cmd
@@ -298,9 +309,13 @@ def setup_command_handlers(ctx):
     ctx.command_handlers['href'] = process_href_cmd
     ctx.command_handlers['url'] = process_url_cmd
     ctx.command_handlers['path'] = process_path_cmd
+    ctx.command_handlers['enspace'] = process_enspace_cmd
 
     ctx.command_handlers['newblock'] = process_cmd_strip
     ctx.command_handlers['pageref'] = process_pageref_cmd
+    ctx.command_handlers['sref'] = process_sref_cmd
+    ctx.command_handlers['tnote'] = process_tnote_cmd
+    ctx.command_handlers['cent'] = process_cent_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -323,6 +338,7 @@ def setup_command_handlers(ctx):
 def process_cmd_default(ctx, tex, cmd, mode):
     """ By default, we just pass commands through untouched """
     if not (mode & MATH):
+        # if cmd.name not in ctx.unprocessed_commands: print(ctx.outputfile, cmd)
         ctx.unprocessed_commands.add(cmd.name)
     return process_cmd_passthru(ctx, tex, cmd, mode)
 
@@ -378,7 +394,7 @@ def process_chapter_cmd(ctx, text, cmd, mode):
     blocks.append('<div id="{}" class="chapter">'.format(ident))
     htmlblocks = process_recursively(ctx, cmd.args[0], mode)
     add_toc_entry(ctx, ''.join(htmlblocks), ident, 'chap')
-    ctx.label_map[ident] = ctx.outputfile, ''.join(htmlblocks)
+    ctx.label_map[ident] = (ctx.outputfile, ident)
     blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
@@ -388,7 +404,7 @@ def process_section_cmd(ctx, text, cmd, mode):
     blocks = catlist(['<h1 id="{}">'.format(ident)])
     htmlblocks = process_recursively(ctx, cmd.args[0], mode)
     add_toc_entry(ctx, ''.join(htmlblocks), ident, 'sec')
-    ctx.label_map[ident] = ctx.outputfile, ''.join(htmlblocks)
+    ctx.label_map[ident] = (ctx.outputfile, ident)
     blocks.extend(htmlblocks)
     blocks.append("</h1>")
     return blocks
@@ -411,20 +427,8 @@ def process_paragraph_cmd(ctx, text, cmd, mode):
     blocks.append("</div><!-- paragraph_title -->")
     return blocks
 
-def process_emph_cmd(ctx, text, cmd, mode):
-    blocks = catlist(["<em>"])
-    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
-    blocks.append("</em>")
-    return blocks
-
-def process_textbf_cmd(ctx, text, cmd, mode):
-    blocks = catlist(["<span class='bf'>"])
-    blocks.extend(process_recursively(ctx, cmd.args[0], mode))
-    blocks.append("</span>")
-    return blocks
-
-def process_texttt_cmd(ctx, text, cmd, mode):
-    blocks = catlist(["<span class='tt'>"])
+def process_cmd_span(ctx, text, cmd, mode):
+    blocks = catlist(["<span class='{}'>".format(cmd.name)])
     blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</span>")
     return blocks
@@ -434,6 +438,12 @@ def process_caption_cmd(ctx, text, cmd, mode):
     blocks.extend(process_recursively(ctx, cmd.args[0], mode))
     blocks.append("</div><!-- caption -->")
     return blocks
+
+def process_enspace_cmd(ctx, text, cmd, mode):
+    if not (mode & MATH):
+        warn(r"\enspace outside of math mode")
+        return catlist(['&nbsp;'])
+    return process_cmd_passthru(ctx, text, cmd, mode)
 
 def process_graphics_cmd(ctx, text, cmd, mode):
     filename = "{}.svg".format(cmd.args[0])
@@ -485,6 +495,10 @@ def process_ref_cmd(ctx, tex, cmd, mode):
     html = crossref_format.format(texlabel, name, text)
     return catlist([html])
 
+def process_sref_cmd(ctx, tex, cmd, mode):
+    cmd.name = 'sec'
+    return process_ref_cmd(ctx, tex, cmd, mode)
+
 def process_pageref_cmd(ctx, tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
     texlabel = cmd.args[0]
@@ -500,6 +514,12 @@ def process_cite_cmd(ctx, tex, cmd, mode):
     blocks.append(",".join(htmls))
     blocks.append(']')
     return blocks
+
+def process_tnote_cmd(ctx, tex, cmd, mode):
+    return catlist(['<sup>{}</sup>'.format(cmd.args[0])])
+
+def process_cent_cmd(ctx, tex, cmd, mode):
+    return catlist(['¢'])
 
 #
 # LaTex environments
@@ -524,17 +544,24 @@ class environment(object):
 def setup_environment_handlers(ctx):
     ctx.environment_handlers['dollar'] = process_inlinemath_env
     ctx.environment_handlers['tabular'] = process_tabular_env
+
     displaymaths = ['equation', 'equation*', 'align', 'align*', 'eqnarray*']
     for name in displaymaths:
         ctx.environment_handlers[name] = process_displaymath_env
+
     passthroughs = ['array', 'cases']
     for name in passthroughs:
         ctx.environment_handlers[name] = process_env_passthru
-    lists = ['itemize', 'enumerate', 'list', 'description']
+
+    lists = ['itemize', 'enumerate', 'list']
     for name in lists:
         ctx.environment_handlers[name] = process_list_env
+    ctx.environment_handlers['description'] = process_description_env
+    ctx.environment_handlers['tablenotes'] = process_description_env
+
     for name in ctx.theoremlike_environments:
         ctx.environment_handlers[name] = process_theoremlike_env
+
     ctx.environment_handlers['center'] = process_center_env
     ctx.environment_handlers['thebibliography'] = process_thebibliography_env
 
@@ -609,7 +636,7 @@ def process_thebibliography_env(ctx, b, env, mode):
 def process_list_env(ctx, b, env, mode):
     newblocks = catlist()
     mapper = dict([('itemize', 'ul'), ('enumerate', 'ol'), ('list', 'ul'),
-                   ('thebibliography', 'ol'), ('description', 'ul')])
+                   ('thebibliography', 'ol')])
     tag = mapper[env.name]
     newblocks.append('<{} class="{}">'.format(tag, env.name))
     newblocks.extend(process_recursively(ctx, process_list_items(env.content), mode))
@@ -617,8 +644,22 @@ def process_list_env(ctx, b, env, mode):
     return newblocks
 
 def process_list_items(b):
-    b = re.sub(r'\\item\s+', '\1', b, 1)
-    b = re.sub(r'\\item\s+', '\2\1', b)
+    b = re.sub(r'\\item((\[)|\s+)', '\1\\2', b, 1)
+    b = re.sub(r'\\item((\[)|\s+)', '\2\1\\2', b)
+    b = re.sub(r'\s*' + '\1' + r'\s*', '<li>', b, 0, re.M|re.S)
+    b = re.sub(r'\s*' + '\2' + r'\s*', '</li>', b, 0, re.M|re.S)
+    return b
+
+def process_description_env(ctx, b, env, mode):
+    newblocks = catlist()
+    newblocks.append('<ul class="{}">'.format(env.name))
+    newblocks.extend(process_recursively(ctx, process_description_items(env.content), mode))
+    newblocks.append('</li></ul>')
+    return newblocks
+
+def process_description_items(b):
+    b = re.sub(r'\\item\[(.+?)\]', '\1\\\\textbf{\\1}', b, 1)
+    b = re.sub(r'\\item\[(.+?)\]', '\2\1\\\\textbf{\\1}', b)
     b = re.sub(r'\s*' + '\1' + r'\s*', '<li>', b, 0, re.M|re.S)
     b = re.sub(r'\s*' + '\2' + r'\s*', '</li>', b, 0, re.M|re.S)
     return b
@@ -724,19 +765,31 @@ def tex2htm(ctx, tex, chapter):
     tex = split_paragraphs(tex)
     tex = re.sub(r'([^\\])\\\[', r'\1\\begin{equation*}', tex)
     tex = re.sub(r'([^\\])\\\]', r'\1\end{equation*}', tex)
+    tex = re.sub(r'\\\$', 'DOLLABILLYALL', tex)
     tex = re.sub(r'\$([^\$]*(\\\$)?)\$', r'\\begin{dollar}\1\\end{dollar}', tex,
                  0, re.M|re.S)
+    tex = re.sub(r'DOLLABILLYALL', '$', tex)
     tex = re.sub(r'([^\\])\~', r'\1&nbsp;', tex)
     tex = re.sub(r'\\myeqref', '\\eqref', tex)
     tex = re.sub(r'---', r'&mdash;', tex)
     tex = re.sub(r'--', r'&ndash;', tex)
     tex = ods.convert_hashes(tex) # TODO: ods specific
+    tex = re.sub(r'\\#', '#', tex)
 
     tex = process_labels(ctx, tex, chapter)
 
     blocks = process_recursively(ctx, tex, 0)
+    tex = "".join(blocks)
 
-    return "".join(blocks)
+    #tex = re.sub(r'\\}', '}', tex)
+    #tex = re.sub(r'\\{', '{', tex)
+    #tex = re.sub(r'\\\\', '<br/>', tex)
+    tex = re.sub(r'([^\\])\\\s', r'\1 ', tex)
+    tex = re.sub(r'([^\\])\\$', r'\1 ', tex)
+    #tex = re.sub(r'\\$', '', tex)
+    tex = re.sub(r'\\,', u"\u202F", tex)
+
+    return tex
 
 def generate_graphics_files(filenames, basedir):
     filenames = [basedir+os.path.sep+f for f in filenames]
@@ -785,7 +838,7 @@ def finish_crossrefs(filename, label_map, html):
                 text = crossref_text(ctx, name, texlabel)
             blocks.append('<a href="{}">{}</a>'.format(htmllabel, text))
     blocks.append(html[i:])
-    return "".join(blocks)
+    return "".join(blocks).replace('DOLLABILLYALL', '$')
 
 def process_file(ctx, tex, dirname, chapter):
     # Read and translate the input

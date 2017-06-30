@@ -17,10 +17,6 @@ import tex2htm
 # This is a regular expression I've debugged for doing hash substitutions
 hash_rx = re.compile(r'(^|#|[^\\])#(([^#]|\\#)*[^\\#])#', re.M|re.S)
 
-def text_sample(txt):
-    if len(txt) < 50:
-        return txt
-    return txt[:20] + '...' + txt[-20:]
 
 # NOTE: Looks more complicated than necessary, but actually had to
 #       be written this way to work around a problem with adjacent matches
@@ -64,6 +60,7 @@ def setup_command_handlers(ctx):
     ctx.command_handlers['javaimport'] =  process_codeimport_cmd
     ctx.command_handlers['etal'] = lambda ctx, text, cmd, mode: catlist(["<em>et al</em>"])
     ctx.command_handlers['lang'] = lambda ctx, text, cmd, mode: catlist(["Java"])
+    ctx.command_handlers['hint'] = process_hint_cmd
     worthless = ['cpponly']
     for c in worthless:
         ctx.command_handlers[c] = tex2htm.process_cmd_worthless
@@ -124,6 +121,9 @@ def process_codeimport_cmd(ctx, tex, cmd, mode):
     blocks.append(highlight("\n".join(code), JavaLexer(), HtmlFormatter()))
     blocks.append("</div><!-- codeimport -->")
     return blocks
+
+def process_hint_cmd(ctx, tex, cmd, mode):
+    return catlist([r'\int_1^k\! (1/x)\, \mathrm{d}x'])
 
 def setup_environment_handlers(ctx):
     ctx.environment_handlers['hash'] = process_hash_env

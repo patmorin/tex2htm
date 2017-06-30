@@ -9,9 +9,9 @@
                    equationNumbers: { autoNumber: "AMS" } },
             extensions: ["tex2jax.js"],
             jax: ["input/TeX","output/HTML-CSS"],
-            tex2jax: { inlineMath: [ ['$','$'], ["\\(","\\)"] ],
-                       displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
-                       processEscapes: true },
+            tex2jax: { inlineMath: [ ["\\(","\\)"] ],
+                      displayMath: [ ["\\[","\\]"] ],
+                      processEscapes: true },
             "HTML-CSS": { availableFonts: ["TeX"],
                           linebreaks: { automatic: true } }
         });
@@ -153,11 +153,14 @@
         div.toc a {
           text-decoration: none;
         }
-        span.tt {
+        span.texttt {
           font-family: monospace;
         }
-        span.bf {
+        span.textbf {
           font-weight: bold;
+        }
+        span.emph {
+          font-style: italic;
         }
 
         span.error {
@@ -170,6 +173,13 @@
         }
         img.includegraphics {
           width: 120%;
+        }
+
+        ul.description {
+          list-style: none;
+        }
+        ul.description li {
+          margin-top: 1ex;
         }
     </style>
     <script
