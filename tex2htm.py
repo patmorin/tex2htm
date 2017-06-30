@@ -145,7 +145,6 @@ def split_paragraphs(tex):
 
 def add_toc_entry(ctx, text, label, name):
     ctx.toc.append('<li>')
-    print(crossref_format.format(label, name, text))
     ctx.toc.append(crossref_format.format(label, name, text))
     ctx.toc.append('</li>')
 
@@ -788,7 +787,7 @@ def tex2htm(ctx, tex, chapter):
     tex = re.sub(r'([^\\])\\$', r'\1 ', tex)
     #tex = re.sub(r'\\$', '', tex)
     tex = re.sub(r'\\,', u"\u202F", tex)
-
+    tex = re.sub(r'\verb+\^+', r'\&Hat;', tex)
     return tex
 
 def generate_graphics_files(filenames, basedir):
