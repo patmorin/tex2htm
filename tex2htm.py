@@ -157,7 +157,8 @@ def process_labels(ctx, tex, chapter):
     environments = ['thm', 'lem', 'exc', 'figure', 'equation']
     ree = r'begin{(' + '|'.join(environments) + r')}'
     rel = r'(\w+)label{(.+?)}'
-    bigone = r'\\({})|\\({})|\\({})|\\(caption)'.format(reh, ree, rel)
+    rel2 = r'label{(.+?)}'
+    bigone = r'\\({})|\\({})|\\({})|\\(caption)|\\({})'.format(reh, ree, rel, rel2)
     rx = re.compile(bigone)
 
     sec_ctr = [chapter] + [0]*(len(headings))
@@ -202,13 +203,10 @@ def process_labels(ctx, tex, chapter):
                 title = '{}&nbsp;{}'.format(nicename, number)
                 blocks.append(r'\begin{{{}}}[{}]'.format(name, title))
 
-        elif m.group(7):
+        elif m.group(6):
             # This is a labelling command (\thmlabel, \seclabel,...)
-            if m.group(7):
-                label = "{}:{}".format(m.group(7), m.group(8))
-                ctx.label_map[label] = (outputfile, lastlabel)
-            else:
-                # TODO: This is probably the target of a pageref
+            label = "{}:{}".format(m.group(7), m.group(8))
+            ctx.label_map[label] = (ctx.outputfile, lastlabel)
 
         elif m.group(9):
             # This is a caption command
@@ -221,6 +219,12 @@ def process_labels(ctx, tex, chapter):
             title = '<span class="title">{}&nbsp;{}</span>'.format(nicename, number)
             text = '{}&emsp;{}'.format(title, cmd.args[0])
             blocks.append(r'\caption{{{}}}'.format(text))
+
+        elif m.group(10):
+            # This is a \label command, probably the target of a pageref
+            idd = gen_unique_id()
+            blocks.append("<a id={}></a>".format(idd))
+            ctx.label_map[m.group(11)] = (ctx.outputfile, idd)
 
         m = rx.search(tex, lastidx)
     blocks.append(tex[lastidx:])
@@ -296,6 +300,7 @@ def setup_command_handlers(ctx):
     ctx.command_handlers['path'] = process_path_cmd
 
     ctx.command_handlers['newblock'] = process_cmd_strip
+    ctx.command_handlers['pageref'] = process_pageref_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -305,7 +310,7 @@ def setup_command_handlers(ctx):
         ctx.command_handlers[c] = process_cmd_worthless
 
     labeltypes = ['', 'fig', 'Fig', 'eq', 'thm', 'lem', 'exc', 'chap', 'sec',
-                  'thm', 'page']
+                  'thm']
     for t in labeltypes:
         ctx.command_handlers[t + 'label'] = process_cmd_worthless
         ctx.command_handlers[t + 'ref'] = process_ref_cmd
@@ -373,7 +378,7 @@ def process_chapter_cmd(ctx, text, cmd, mode):
     blocks.append('<div id="{}" class="chapter">'.format(ident))
     htmlblocks = process_recursively(ctx, cmd.args[0], mode)
     add_toc_entry(ctx, ''.join(htmlblocks), ident, 'chap')
-    ctx.label_map[ident] = outputfile, ''.join(htmlblocks)
+    ctx.label_map[ident] = ctx.outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append('</div><!-- chapter -->')
     return blocks
@@ -383,7 +388,7 @@ def process_section_cmd(ctx, text, cmd, mode):
     blocks = catlist(['<h1 id="{}">'.format(ident)])
     htmlblocks = process_recursively(ctx, cmd.args[0], mode)
     add_toc_entry(ctx, ''.join(htmlblocks), ident, 'sec')
-    ctx.label_map[ident] = outputfile, ''.join(htmlblocks)
+    ctx.label_map[ident] = ctx.outputfile, ''.join(htmlblocks)
     blocks.extend(htmlblocks)
     blocks.append("</h1>")
     return blocks
@@ -465,6 +470,8 @@ def crossref_text(ctx, name, texlabel, default=''):
     num = htmllabel[htmllabel.find(':')+1:]
     if name == 'cite':
         return num
+    if name == 'page':
+        return 'X'
     if name in ctx.named_entities:
         return "{}&nbsp;{}".format(ctx.named_entities[name], num)
     warn("Using unnamed reference type: {}".format(name))
@@ -474,6 +481,13 @@ def crossref_text(ctx, name, texlabel, default=''):
 def process_ref_cmd(ctx, tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
     texlabel = "{}:{}".format(name, cmd.args[0])
+    text = crossref_text(ctx, name, texlabel)
+    html = crossref_format.format(texlabel, name, text)
+    return catlist([html])
+
+def process_pageref_cmd(ctx, tex, cmd, mode):
+    name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
+    texlabel = cmd.args[0]
     text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
     return catlist([html])
@@ -580,7 +594,7 @@ def process_thebibliography_env(ctx, b, env, mode):
         texlabel = "cite:{}".format(m.group(1))
         htmllabel = 'cite:{}'.format(ref)
         ref += 1
-        ctx.label_map[texlabel] = (outputfile, htmllabel)
+        ctx.label_map[texlabel] = (ctx.outputfile, htmllabel)
         blocks.append(r'<a id="{}"</a>'.format(htmllabel))
         blocks.append(r'\item')
     blocks.append(env.content[i:])
@@ -814,7 +828,7 @@ if __name__ == "__main__":
     filename = basedir + os.path.sep + 'skeleton.htm'
     (head, tail) = re.split('CONTENT', open(filename).read())
 
-    outputfiles = dict()
+    ctx.outputfiles = dict()
 
     # Process all the input files
     chapter = 0
@@ -823,8 +837,7 @@ if __name__ == "__main__":
         dirname = os.path.dirname(texfilename)
         base, ext = os.path.splitext(texfilename)
         htmlfilename = base + '.html'
-        global outputfile
-        outputfile = htmlfilename
+        ctx.outputfile = htmlfilename
         print("Reading from {}".format(texfilename))
         tex = open(texfilename, "r").read()
         content = process_file(ctx, tex, dirname, chapter)
@@ -837,23 +850,22 @@ if __name__ == "__main__":
         tailx = tail.replace('FOOTNOTES', ''.join(ctx.footnotes))
         ctx.footnotes.clear()
 
-        outputfiles[htmlfilename] = "".join([headx, content, tailx])
+        ctx.outputfiles[htmlfilename] = "".join([headx, content, tailx])
 
         chapter += 1
 
-    for htmlfilename in outputfiles:
-        outputfiles[htmlfilename] = finish_crossrefs(htmlfilename,
+    for htmlfilename in ctx.outputfiles:
+        ctx.outputfiles[htmlfilename] = finish_crossrefs(htmlfilename,
                                                      ctx.label_map,
-                                                     outputfiles[htmlfilename])
+                                                     ctx.outputfiles[htmlfilename])
         print("Writing to {}".format(htmlfilename))
         of = open(htmlfilename, 'w')
-        of.write(outputfiles[htmlfilename])
+        of.write(ctx.outputfiles[htmlfilename])
         of.close()
 
     # Create global table of contents
     title = 'Open Data Structures'
     headx = re.sub('TITLE', title, head)
-    print("="*50)
     tocfile = outputdir + os.path.sep + 'toc.html'
     tochtml = finish_crossrefs(tocfile, ctx.label_map, "".join(ctx.global_toc))
     headx = re.sub('TOC', tochtml, headx)
