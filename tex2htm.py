@@ -396,8 +396,7 @@ def process_dots_cmd(ctx, tex, cmd, mode):
     return catlist([ '?' ])
 
 def process_chapter_cmd(ctx, text, cmd, mode):
-    global title
-    title = cmd.args[0]
+    ctx.title = cmd.args[0]
     blocks = catlist()
     ident = gen_unique_id()
     blocks.append('<div id="{}" class="chapter">'.format(ident))
