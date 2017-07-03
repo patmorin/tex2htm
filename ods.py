@@ -9,9 +9,7 @@ from pygments.formatters import HtmlFormatter
 
 
 from catlist import catlist
-#catlist = list
 
-import cfg
 import tex2htm
 
 # This is a regular expression I've debugged for doing hash substitutions
