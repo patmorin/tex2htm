@@ -67,7 +67,7 @@ class context(object):
 
 # Math mode
 MATH = 1
-
+TABULAR = 2
 
 # We make internal labels that look like this
 # CROSSREF〈texlabel|name|text〉
@@ -315,6 +315,7 @@ def setup_command_handlers(ctx):
     ctx.command_handlers['sref'] = process_sref_cmd
     ctx.command_handlers['tnote'] = process_tnote_cmd
     ctx.command_handlers['cent'] = process_cent_cmd
+    ctx.command_handlers['t2hlinebreak'] = process_t2hlinebreak_cmd
 
     worthless = ['newlength', 'setlength', 'addtolength', 'vspace', 'index',
                  'cpponly', 'cppimport', 'pcodeonly', 'pcodeimport', 'qedhere',
@@ -369,6 +370,15 @@ def process_mathbreaker_cmd(ctx, text, cmd, mode):
     if mode & MATH:
         return process_cmd_passthru(ctx, text, cmd, mode & ~MATH)
     return process_cmd_strip(ctx, text, cmd, mode)
+
+def process_t2hlinebreak_cmd(ctx, tex, cmd, mode):
+    blocks = catlist()
+    if mode & (MATH | TABULAR):
+        blocks.append('\\\\')
+        if cmd.optargs:
+            blocks.append('[{}]'.format(optargs[0]))
+    blocks.append('<br/>')
+    return blocks
 
 def process_path_cmd(ctx, tex, cmd, mode):
     return catlist(['<span class="path">{}</span>'.format(cmd.args[0])])
@@ -665,6 +675,7 @@ def process_description_items(b):
 
 def process_tabular_env(ctx, tex, env, mode):
     # TODO: use a catlist of strings instead
+    mode |= TABULAR
     inner = "".join(process_recursively(ctx, env.content, mode))
     rows = re.split(r'\\\\', inner)
     rows = [re.split(r'\&', r) for r in rows]
@@ -762,6 +773,7 @@ def tex2htm(ctx, tex, chapter):
     tex = cleanup_oldschool(tex)
     tex = cleanup_accented_chars(tex)
     tex = split_paragraphs(tex)
+    tex = re.sub(r'\\\\', r'\\t2hlinebreak', tex)
     tex = re.sub(r'([^\\])\\\[', r'\1\\begin{equation*}', tex)
     tex = re.sub(r'([^\\])\\\]', r'\1\end{equation*}', tex)
     tex = re.sub(r'\\\$', 'DOLLABILLYALL', tex)
