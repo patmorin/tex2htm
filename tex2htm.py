@@ -376,7 +376,7 @@ def process_t2hlinebreak_cmd(ctx, tex, cmd, mode):
     if mode & (MATH | TABULAR):
         blocks.append('\\\\')
         if cmd.optargs:
-            blocks.append('[{}]'.format(optargs[0]))
+            blocks.append('[{}]'.format(cmd.optargs[0]))
     blocks.append('<br/>')
     return blocks
 
