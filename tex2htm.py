@@ -12,14 +12,13 @@ from catlist import catlist
 
 
 # TODO: Support for importing subclasses
-# TODO: More parsing cleanup
-# TODO: pageref
 # TODO: Handle brace blocks that are misidentified as arguments
 # TODO: Plot in Figure 1.5
 # TODO: Nicer skeleton
+
+
+# Low priority
 # TODO: Support for \verb
-# TODO: Handle \\ (but only outside of math environments)
-# Figure 1.5
 
 import ods
 
@@ -929,7 +928,7 @@ if __name__ == "__main__":
     # Create global table of contents
     title = 'Open Data Structures'
     headx = re.sub('TITLE', title, head)
-    tocfile = outputdir + os.path.sep + 'toc.html'
+    tocfile = outputdir + os.path.sep + 'index.html'
     tochtml = finish_crossrefs(tocfile, ctx.label_map, "".join(ctx.global_toc))
     headx = re.sub('TOC', tochtml, headx)
     tailx = tail.replace('FOOTNOTES', '')
