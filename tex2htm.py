@@ -675,7 +675,7 @@ def process_tabular_env(ctx, tex, env, mode):
     # TODO: use a catlist of strings instead
     mode |= TABULAR
     inner = "".join(process_recursively(ctx, env.content, mode))
-    rows = re.split(r'\\\\', inner)
+    rows = re.split(r'\\\\(?:\[[^\\]]+\])?', inner)
     rows = [re.split(r'\&', r) for r in rows]
     table = '<table align="center">'
     for r in rows:
