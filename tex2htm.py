@@ -71,7 +71,7 @@ TABULAR = 2
 # We make internal labels that look like this
 # CROSSREF〈texlabel|name|text〉
 crossref_format = 'CROSSREF〈{}|{}|{}〉'
-crossref_rx = re.compile(r'CROSSREF〈((\w|:|-)+)\|(\w+)\|([^〉]*)〉')
+crossref_rx = re.compile(r'CROSSREF〈((\w|:|-)+)\|((?:\w|:|-)+)\|([^〉]*)〉')
 
 #
 # Utilities
@@ -145,6 +145,8 @@ def split_paragraphs(tex):
 def add_toc_entry(ctx, text, label, name):
     ctx.toc.append('<li>')
     ctx.toc.append(crossref_format.format(label, name, text))
+    if not label:
+        print("HEY!")
     ctx.toc.append('</li>')
 
 #
@@ -500,6 +502,8 @@ def process_ref_cmd(ctx, tex, cmd, mode):
     texlabel = "{}:{}".format(name, cmd.args[0])
     text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
+    if not texlabel:
+        warn("Outputting {}".format(html))
     return catlist([html])
 
 def process_sref_cmd(ctx, tex, cmd, mode):
@@ -511,6 +515,8 @@ def process_pageref_cmd(ctx, tex, cmd, mode):
     texlabel = cmd.args[0]
     text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
+    if not texlabel:
+        warn("Outputting {}".format(html))
     return catlist([html])
 
 def process_cite_cmd(ctx, tex, cmd, mode):
