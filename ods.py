@@ -77,6 +77,7 @@ def get_member(member, clz):
     typeregex = r'\w+(?:<.*>)?(?:\[\])?'
     keywords = '(?:static|public|protected|private|final)'
     methodregex = r'\s*(?:<[^>]*>)?\s*(?:{type})?\s*(\w+)\s*\((.*)\)\s*{{\s*$'.format(type=typeregex)
+    instancevarregex = r'\s*(?:{type})\s+(\w+)\s*;\s*$'.format(type=typeregex)
     for line in open(filename).read().splitlines():
         line = re.sub('{}\s+'.format(keywords), '', line)
         line = re.sub('\t', '    ', line)
@@ -91,15 +92,17 @@ def get_member(member, clz):
                 if sig == member:
                     found = True
                     writing = True
-            m = re.match('\s*(<[^>]*>)?\s*(?:\w+(?:<.*>)?(?:\[\])?)\s*(\w+)\s*;\s*$', line)
+            #m = re.match('\s*(<[^>]*>)?\s*(?:\w+(?:<.*>)?(?:\[\])?)\s*(\w+)\s*;\s*$', line)
+            m = re.match(instancevarregex, line)
             if m:
                 # this is an instance variable declaration
-                name = m.group(2)
+                name = m.group(1)
                 if name == member:
                     found = True
                     code.append(line)
             m = re.match(r'^\s*(?:{}\s+)*class\s+((?:\w|[<>])+)'.format(keywords), line)
             if m:
+                # This is an internal class definition
                 name = m.group(1)
                 if name == member:
                     found = True
