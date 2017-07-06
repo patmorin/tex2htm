@@ -80,7 +80,7 @@ def get_member(member, clz):
         line = re.sub('{}\s+'.format(keywords), '', line)
         line = re.sub('\t', '    ', line)
         if d == 1:
-            m = re.match('\s*(<[^>]*>)?\s*\w+\s*(\w+)\s*\((.*)\)\s*{\s*$', line)
+            m = re.match(r'\s*(<[^>]*>)?\s*(?:\w+\s+)?\s*(\w+)\s*\((.*)\)\s*{\s*$', line)
             if m:
                 # this line is a method definition
                 name = m.group(2)
