@@ -145,8 +145,6 @@ def split_paragraphs(tex):
 def add_toc_entry(ctx, text, label, name):
     ctx.toc.append('<li>')
     ctx.toc.append(crossref_format.format(label, name, text))
-    if not label:
-        print("HEY!")
     ctx.toc.append('</li>')
 
 #
@@ -499,11 +497,13 @@ def crossref_text(ctx, name, texlabel, default=''):
 
 def process_ref_cmd(ctx, tex, cmd, mode):
     name = re.sub(r'^(.*)ref', r'\1', cmd.name).lower()
-    texlabel = "{}:{}".format(name, cmd.args[0])
+    if name:
+        texlabel = "{}:{}".format(name, cmd.args[0])
+    else:
+        name = cmd.args[0].split(':')[0]
+        texlabel = cmd.args[0]
     text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
-    if not texlabel:
-        warn("Outputting {}".format(html))
     return catlist([html])
 
 def process_sref_cmd(ctx, tex, cmd, mode):
@@ -515,8 +515,6 @@ def process_pageref_cmd(ctx, tex, cmd, mode):
     texlabel = cmd.args[0]
     text = crossref_text(ctx, name, texlabel)
     html = crossref_format.format(texlabel, name, text)
-    if not texlabel:
-        warn("Outputting {}".format(html))
     return catlist([html])
 
 def process_cite_cmd(ctx, tex, cmd, mode):
