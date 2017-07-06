@@ -81,7 +81,7 @@ def get_member(member, clz):
     for line in open(filename).read().splitlines():
         line = re.sub('{}\s+'.format(keywords), '', line)
         line = re.sub('\t', '    ', line)
-        line = re.sub(r'\sthrows\s[^{]+$', '', line)
+        line = re.sub(r'\sthrows\s[^{]+', '', line)
         if d == 1:
             m = re.match(methodregex, line)
             if m:
