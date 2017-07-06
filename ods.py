@@ -76,7 +76,8 @@ def get_member(member, clz):
     found = False
     retype = r'\w+(?:<.*>)?(?:\[\])?'
     for line in open(filename).read().splitlines():
-        line = re.sub('(static|public|protected|private|final)\s+', '', line)
+        keywords = '(?:static|public|protected|private|final)'
+        line = re.sub('{}\s+'.format(keywords), '', line)
         line = re.sub('\t', '    ', line)
         if d == 1:
             m = re.match('\s*(<[^>]*>)?\s*\w+\s*(\w+)\s*\((.*)\)\s*{\s*$', line)
@@ -91,12 +92,19 @@ def get_member(member, clz):
                     writing = True
             m = re.match('\s*(<[^>]*>)?\s*(?:\w+(?:<.*>)?(?:\[\])?)\s*(\w+)\s*;\s*$', line)
             if m:
-                # this is an instance variable
+                # this is an instance variable declaration
                 name = m.group(2)
                 # print("Instance variable:{} {} {}".format(m.group(0), name, member))
                 if name == member:
                     found = True
                     code.append(line)
+            m = re.match(r'^\s*(?:{}\s+)*class\s+(\w+)'.format(keywords), line)
+            if m:
+                name = m.group(1)
+                if name == member:
+                    found = True
+                    writing = True
+                #print("Intenal class: {} {}".format(m.group(1), member))
 
         d += line.count('{')
         d -= line.count('}')
