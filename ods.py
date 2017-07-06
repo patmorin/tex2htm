@@ -74,17 +74,18 @@ def get_member(member, clz):
     d = 0
     writing = False
     found = False
-    retype = r'\w+(?:<.*>)?(?:\[\])?'
+    typeregex = r'\w+(?:<.*>)?(?:\[\])?'
+    keywords = '(?:static|public|protected|private|final)'
+    methodregex = r'\s*(?:<[^>]*>)?\s*(?:{type})?\s*(\w+)\s*\((.*)\)\s*{{\s*$'.format(type=typeregex)
     for line in open(filename).read().splitlines():
-        keywords = '(?:static|public|protected|private|final)'
         line = re.sub('{}\s+'.format(keywords), '', line)
         line = re.sub('\t', '    ', line)
         if d == 1:
-            m = re.match(r'\s*(<[^>]*>)?\s*(?:\w+\s+)?\s*(\w+)\s*\((.*)\)\s*{\s*$', line)
+            m = re.match(methodregex, line)
             if m:
                 # this line is a method definition
-                name = m.group(2)
-                args = [x.strip() for x in m.group(3).split(',') if x]
+                name = m.group(1)
+                args = [x.strip() for x in m.group(2).split(',') if x]
                 argnames = [x.split()[-1] for x in args]
                 sig = '{}({})'.format(name, ",".join(argnames))
                 if sig == member:
@@ -94,17 +95,15 @@ def get_member(member, clz):
             if m:
                 # this is an instance variable declaration
                 name = m.group(2)
-                # print("Instance variable:{} {} {}".format(m.group(0), name, member))
                 if name == member:
                     found = True
                     code.append(line)
-            m = re.match(r'^\s*(?:{}\s+)*class\s+(\w+)'.format(keywords), line)
+            m = re.match(r'^\s*(?:{}\s+)*class\s+((?:\w|[<>])+)'.format(keywords), line)
             if m:
                 name = m.group(1)
                 if name == member:
                     found = True
                     writing = True
-                #print("Intenal class: {} {}".format(m.group(1), member))
 
         d += line.count('{')
         d -= line.count('}')
