@@ -74,6 +74,7 @@ def get_member(member, clz):
     d = 0
     writing = False
     found = False
+    retype = r'\w+(?:<.*>)?(?:\[\])?'
     for line in open(filename).read().splitlines():
         line = re.sub('(static|public|protected|private|final)\s+', '', line)
         line = re.sub('\t', '    ', line)
@@ -81,18 +82,20 @@ def get_member(member, clz):
             m = re.match('\s*(<[^>]*>)?\s*\w+\s*(\w+)\s*\((.*)\)\s*{\s*$', line)
             if m:
                 # this line is a method definition
-                found = True
                 name = m.group(2)
                 args = [x.strip() for x in m.group(3).split(',') if x]
                 argnames = [x.split()[-1] for x in args]
                 sig = '{}({})'.format(name, ",".join(argnames))
                 if sig == member:
+                    found = True
                     writing = True
-            m = re.match('\s*(<[^>]*>)?\s*\w+\s*(\w+)\s*;\s*$', line)
+            m = re.match('\s*(<[^>]*>)?\s*(?:\w+(?:<.*>)?(?:\[\])?)\s*(\w+)\s*;\s*$', line)
             if m:
                 # this is an instance variable
                 name = m.group(2)
+                # print("Instance variable:{} {} {}".format(m.group(0), name, member))
                 if name == member:
+                    found = True
                     code.append(line)
 
         d += line.count('{')
