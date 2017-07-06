@@ -702,7 +702,7 @@ def process_tabular_env(ctx, tex, env, mode):
 def process_theoremlike_env(ctx, tex, env, mode):
     newblocks = catlist(['<div class="{}">'.format(env.name)])
     if env.optargs:
-        title = env.optargs[0]
+        title = ''.join(process_recursively(ctx, env.optargs[0], mode))
     elif env.name in ctx.named_entities:
         title = ctx.named_entities[env.name]
     else:
