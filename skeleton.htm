@@ -99,7 +99,24 @@
             content: "    ∎";
             text-align: right;
         }
+        div.heading {
+            font-size: 140%;
+            font-weight: bold;
+            font-family: sans;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        div.heading a {
+            color: black;
+        }
         div.chapter {
+            font-size: 140%;
+            font-weight: normal;
+            font-family: sans;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        div.toc {
             font-size: 140%;
             font-weight: normal;
             font-family: sans;
@@ -188,19 +205,22 @@
   </head>
   <body lang="en" class="hyphenate">
     <div id="content">
-      \(\newcommand{\E}{\mathrm{E}}
-       \DeclareMathOperator{\ddiv}{div}
-      \)
-      <h1>Contents</h1>
-      <ul class="toc">
-        TOC
-      </ul>
-      CONTENT
-      <h1>Footnotes</h1>
-      <ol id="footnotes">
-        FOOTNOTES
-      </ol>
-    </div>
+      <div class="heading"><a href="http://opendatastructures.org/">Open Data Structures</a></div>
+      <div id="nav-top"><a alt="up arrow" href="index.html">Table of Contents</a></div>
+        \(\newcommand{\E}{\mathrm{E}}
+         \DeclareMathOperator{\ddiv}{div}
+        \)
+        <div class="toc">Contents</div>
+        <ul class="toc">
+          TOC
+        </ul>
+        CONTENT
+        <h1>Footnotes</h1>
+        <ol id="footnotes">
+          FOOTNOTES
+        </ol>
+      <div id="nav-bottom"><a alt="up arrow" href="#nav-top">↑</a></div>
+    </div><!--content -->
   </body>
   <script>Hyphenator.run();</script>
 </html>
