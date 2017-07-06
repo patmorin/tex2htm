@@ -74,7 +74,7 @@ def get_member(member, clz):
     d = 0
     writing = False
     found = False
-    typeregex = r'\w+(?:<.*>)?(?:\[\])?'
+    typeregex = r'\w+(?:<.*>)?(?:\[\])*'
     keywords = '(?:static|public|protected|private|final)'
     methodregex = r'\s*(?:<[^>]*>\s+)?(?:{type}\s+)?(\w+)\s*\((.*)\)\s*{{\s*$'.format(type=typeregex)
     instancevarregex = r'\s*(?:{type})\s+(\w+)\s*(?:=.*)?;'.format(type=typeregex)
