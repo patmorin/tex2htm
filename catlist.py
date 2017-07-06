@@ -19,6 +19,15 @@ class catlist(object):
             for x in iterable:
                 self.append(x)
 
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, i):
+        assert(i in [0, -1, self.n-1])
+        if i == 0:
+            return self.first.car
+        return self.last.car
+
     def append(self, x):
         assert(not self.dead)
         node = catlist_node(x)

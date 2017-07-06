@@ -143,6 +143,15 @@ def split_paragraphs(tex):
     return "\n".join(lines)
 
 def add_toc_entry(ctx, text, label, name):
+    # d = text.count('.')
+    # if len(ctx.toc) > 0:
+    #     last = ctx.toc[-1]
+    #     print(last, text)
+    #     d_last = last.count('.')
+    #     if d > d_last:
+    #         ctx.toc.append("<ul>")
+    #     elif d < d_last:
+    #         ctx.toc.append("</ul>")
     ctx.toc.append('<li>')
     ctx.toc.append(crossref_format.format(label, name, text))
     ctx.toc.append('</li>')
