@@ -76,7 +76,7 @@ def get_member(member, clz):
     found = False
     typeregex = r'\w+(?:<.*>)?(?:\[\])?'
     keywords = '(?:static|public|protected|private|final)'
-    methodregex = r'\s*(?:<[^>]*>)?\s*(?:{type})?\s*(\w+)\s*\((.*)\)\s*{{\s*$'.format(type=typeregex)
+    methodregex = r'\s*(?:<[^>]*>\s+)?(?:{type}\s+)?(\w+)\s*\((.*)\)\s*{{\s*$'.format(type=typeregex)
     instancevarregex = r'\s*(?:{type})\s+(\w+)\s*;'.format(type=typeregex)
     for line in open(filename).read().splitlines():
         line = re.sub('{}\s+'.format(keywords), '', line)
