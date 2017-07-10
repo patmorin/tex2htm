@@ -10,7 +10,7 @@ if __name__ == "__main__":
               ]
     texfiles = [f+'.tex' for f in texfiles]
     texfiles.append('ods-java.bbl')
-    basedir = '/home/morin/remote/public_html/ods/newhtml/ods/latex'
+    basedir = '/home/morin/remote/public_html/ods/newhtml/ods/latex2'
     texfiles = [basedir + os.path.sep + f for f in texfiles]
 
     subprocess.call(['./tex2htm.py'] + texfiles)

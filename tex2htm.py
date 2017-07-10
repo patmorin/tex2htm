@@ -11,8 +11,7 @@ from collections import defaultdict
 from catlist import catlist
 
 
-# TODO: Support for importing subclasses
-# TODO: Handle brace blocks that are misidentified as arguments
+# TODO: Get rid of \ in front of % and &
 # TODO: Plot in Figure 1.5
 # TODO: Nicer skeleton
 
@@ -35,6 +34,7 @@ class context(object):
                           'cor': 'Corollary',
                           'lem': 'Lemma',
                           'fig': 'Figure',
+                          'tab': 'Table',
                           'figure': 'Figure',
                           'eq': 'Equation',
                           'exc': 'Exercise',
@@ -55,7 +55,6 @@ class context(object):
 
         # Used for processing footnotes
         self.footnote_counter = 0
-        self.footnotes = list()
 
         # Document title
         self.title = 'Untitled'
@@ -475,9 +474,11 @@ def process_centering_cmd(ctx, text, cmd, mode):
 def process_footnote_cmd(ctx, tex, cmd, mode):
     blocks = catlist()
     ctx.footnote_counter += 1
-    blocks.append('<a class="ptr">({})</a>'.format(ctx.footnote_counter))
+    blocks.append('<a class="footnote"><sup>{}</sup>'.format(ctx.footnote_counter))
     fntext = ''.join(process_recursively(ctx, cmd.args[0], mode))
-    ctx.footnotes.append('<li>{}</li>'.format(fntext))
+    print("fntext='{}'".format(fntext))
+    blocks.append('<span class="fntext">{}</span>'.format(fntext))
+    blocks.append('</a>')
     return blocks
 
 def process_url_cmd(ctx, tex, cmd, mode):
@@ -781,6 +782,7 @@ def tex2htm(ctx, tex, chapter):
     # Some preprocessing
     tex = ods.preprocess_hashes(tex) # TODO: ods specific
     tex = strip_comments(tex)
+    tex = re.sub(r'\\%', "%", tex)
     tex = cleanup_oldschool(tex)
     tex = cleanup_accented_chars(tex)
     tex = split_paragraphs(tex)
@@ -904,6 +906,7 @@ if __name__ == "__main__":
     (head, tail) = re.split('CONTENT', open(filename).read())
 
     ctx.outputfiles = dict()
+    ctx.screenreader_mode = False
 
     # Process all the input files
     chapter = 0
@@ -922,10 +925,7 @@ if __name__ == "__main__":
         ctx.global_toc.extend(ctx.toc)
         ctx.toc.__init__()
 
-        tailx = tail.replace('FOOTNOTES', ''.join(ctx.footnotes))
-        ctx.footnotes.clear()
-
-        ctx.outputfiles[htmlfilename] = "".join([headx, content, tailx])
+        ctx.outputfiles[htmlfilename] = "".join([headx, content, tail])
 
         chapter += 1
 
@@ -944,10 +944,9 @@ if __name__ == "__main__":
     tocfile = outputdir + os.path.sep + 'index.html'
     tochtml = finish_crossrefs(tocfile, ctx.label_map, "".join(ctx.global_toc))
     headx = re.sub('TOC', tochtml, headx)
-    tailx = tail.replace('FOOTNOTES', '')
     fp = open(tocfile, 'w')
     fp.write(headx)
-    fp.write(tailx)
+    fp.write(tail)
     fp.close()
 
     # Print warnings

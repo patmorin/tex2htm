@@ -9,8 +9,27 @@ from pygments.formatters import HtmlFormatter
 
 
 from catlist import catlist
-
 import tex2htm
+
+
+# This is for doing inline code formatting
+class CodeHtmlFormatter(HtmlFormatter):
+
+    def __init__(self):
+        super(CodeHtmlFormatter, self).__init__()
+        self.lineseparator = ''
+
+    def wrap(self, source, outfile):
+        return self._wrap_code(source)
+
+    def _wrap_code(self, source):
+        yield 0, '<code class="highlight">'
+        for i, t in source:
+            # if i == 1:
+            #     # it's a line of formatted code
+            #     t += '<br>'
+            yield i, t
+        yield 0, '</code>'
 
 # This is a regular expression I've debugged for doing hash substitutions
 hash_rx = re.compile(r'(^|#|[^\\])#(([^#]|\\#)*[^\\#])#', re.M|re.S)
@@ -141,8 +160,15 @@ def setup_environment_handlers(ctx):
     ctx.environment_handlers['hash'] = process_hash_env
 
 def process_hash_env(ctx, b, env, mode):
-    inner = r'\mathtt{{{}}}'.format(re.sub(r'(^|[^\\])&', r'\1\&', env.content))
+    if ctx.screenreader_mode:
+        inner = re.sub(r'(^|[^\\])&', r'\1\&', env.content)
+        if mode & tex2htm.MATH:
+            return catlist([r'\texttt{{{}}}'.format(inner)])
+        return catlist([r'<span class="texttt">{}</span>'.format(inner)])
+
+    inner = re.sub(r'(^|[^\\])&', r'\1\&', env.content)
+    # return catlist([highlight(inner, JavaLexer(), CodeHtmlFormatter())])
     if mode & tex2htm.MATH:
-        return catlist([inner])
+        return catlist([r'\texttt{{{}}}'.format(inner)])
     else:
-        return catlist([r'\(', inner, r'\)'])
+        return catlist([highlight(inner, JavaLexer(), CodeHtmlFormatter())])
