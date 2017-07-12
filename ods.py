@@ -162,7 +162,6 @@ def setup_environment_handlers(ctx):
 
 def process_hash_env(ctx, b, env, mode):
     if ctx.screenreader_mode:
-        print(mode, env)
         inner = re.sub(r'(^|[^\\])&', r'\1\&', env.content)
         if mode & tex2htm.MATH:
             return catlist([r'\texttt{{{}}}'.format(inner)])

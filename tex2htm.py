@@ -64,8 +64,8 @@ class context(object):
         self.toc = catlist()
 
 MATH = 1  # Mode for processing math environments
-MATHBREAK = 2  # A break from mathmode line \mbox or \text
-TABULAR = 3 # Mode for processing tabular environments
+MATHBREAK = 1<<1  # A break from mathmode line \mbox or \text
+TABULAR = 1<<2 # Mode for processing tabular environments
 
 # We make internal labels that look like this
 # CROSSREF〈texlabel|name|text〉
@@ -688,6 +688,7 @@ def process_tabular_env(ctx, tex, env, mode):
     # TODO: use a catlist of strings instead
     mode |= TABULAR
     inner = "".join(process_recursively(ctx, env.content, mode))
+    print(inner)
     rows = re.split(r'\\\\(?:\[[^\\]]+\])?', inner)
     rows = [re.split(r'\&', r) for r in rows]
     table = '<table align="center">'
