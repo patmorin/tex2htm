@@ -131,7 +131,8 @@ def get_member(member, clz):
         d += line.count('{')
         d -= line.count('}')
         if writing:
-            if not re.search('IndexOutOfBoundsException', line):
+            if (not re.search('IndexOutOfBoundsException', line)) \
+               and (not re.search('@SuppressWarnings', line)):
                 code.append(line)
             if d <= 1:
                 writing = False
