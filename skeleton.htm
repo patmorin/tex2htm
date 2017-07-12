@@ -27,13 +27,22 @@
     <link href='https://fonts.googleapis.com/css?family=PT Mono' rel='stylesheet'>
     <link href='https://fonts.googleapis.com/css?family=Vollkorn' rel='stylesheet'>
     <style type="text/css">
-        html, body {       /* for full-height background */
+        html, body {  /* for full-height background */
             font: 14pt/22pt "Vollkorn";
             height: 100%;
             margin: 0;
             margin-bottom: 3em;
             padding: 0;
         }
+
+        /* This lets us exactly match MathJax's tt font */
+        @font-face {
+          font-family: "tex-tt";
+          src: url('texfonts/cmuntt.otf') format('opentype');
+          font-weight: normal;
+          font-style: normal;
+        }
+
         #content {
             max-width: 40em;
             margin: auto;
@@ -168,17 +177,15 @@
           text-decoration: none;
         }
         span.texttt {
-          font-family: "PT Mono", monospace;
-          font-size: 85%;
+          font-family: "tex-tt", monospace;
         }
         .highlight {
-          font-family: "PT Mono", monospace;
-          font-size: 85%;
+          font-family: "tex-tt", monospace;
           background: white;
         }
         div.highlight pre {
-          font-family: "PT Mono", monospace;
-          font-size: 85%;
+          font-family: "tex-tt", monospace;
+          line-height: 120%;
         }
         span.textbf {
           font-weight: bold;
@@ -253,6 +260,7 @@
         table {
           font-size: 100%;
         }
+
 
     </style>
     <script
