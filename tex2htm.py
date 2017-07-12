@@ -63,9 +63,9 @@ class context(object):
         self.global_toc = catlist()
         self.toc = catlist()
 
-# Math mode
-MATH = 1
-TABULAR = 2
+MATH = 1  # Mode for processing math environments
+MATHBREAK = 2  # A break from mathmode line \mbox or \text
+TABULAR = 3 # Mode for processing tabular environments
 
 # We make internal labels that look like this
 # CROSSREF〈texlabel|name|text〉
@@ -375,7 +375,7 @@ def process_cmd_strip(ctx, text, cmd, mode):
 def process_mathbreaker_cmd(ctx, text, cmd, mode):
     """ These command break out of math mode """
     if mode & MATH:
-        return process_cmd_passthru(ctx, text, cmd, mode & ~MATH)
+        return process_cmd_passthru(ctx, text, cmd, mode | MATHBREAK)
     return process_cmd_strip(ctx, text, cmd, mode)
 
 def process_t2hlinebreak_cmd(ctx, tex, cmd, mode):
@@ -476,7 +476,6 @@ def process_footnote_cmd(ctx, tex, cmd, mode):
     ctx.footnote_counter += 1
     blocks.append('<a class="footnote"><sup>{}</sup>'.format(ctx.footnote_counter))
     fntext = ''.join(process_recursively(ctx, cmd.args[0], mode))
-    print("fntext='{}'".format(fntext))
     blocks.append('<span class="fntext">{}</span>'.format(fntext))
     blocks.append('</a>')
     return blocks
@@ -762,13 +761,16 @@ def cleanup_accented_chars(tex):
               ("'",'o','ó'),
               ("'",'c','ć'),
               ("'",r'\\i','í'),
-              ('"',r'\\i','ï'),
-              ('u','a','ă'),
-              ('v','a','ă'),   # FIXME: Not quite
-              ('c','s','ş')
-             ]
+              ('"',r'\\i','ï')]
     for m in mapper:
         pattern = r'\\{cmd}(\s*{arg}|\{{{arg}\}})'.format(cmd=m[0], arg=m[1])
+        tex = re.sub(pattern, m[2], tex)
+    # Note: \'a = á but \varphi != ăphi
+    mapper = [('u','a','ă'),
+              ('v','a','ă'),   # FIXME: Not quite
+              ('c','s','ş')]
+    for m in mapper:
+        pattern = r'\\{cmd}(\s+{arg}|\{{{arg}\}})'.format(cmd=m[0], arg=m[1])
         tex = re.sub(pattern, m[2], tex)
     for x in ['`', "'", '"']:
         pattern = r'\\{}'.format(x)

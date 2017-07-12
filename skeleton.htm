@@ -13,8 +13,11 @@
             tex2jax: { inlineMath: [ ["\\(","\\)"] ],
                       displayMath: [ ["\\[","\\]"] ],
                       processEscapes: true },
-            "HTML-CSS": { prererredFont: "TeX",
-                          linebreaks: { automatic: true } }
+            "HTML-CSS": {availableFonts: ["TeX"]}
+
+            /*"HTML-CSS": { prererredFont: "STIX-Web",
+                          linebreaks: { automatic: true } */
+
         });
         // Use this to fix conflict with Hyphenator and MathJax
         MathJax.Hub.Register.StartupHook("TeX Jax Ready",function () {
@@ -24,7 +27,6 @@
         });
     </script>
     <link rel="stylesheet" href="pygments.css" type="text/css">
-    <link href='https://fonts.googleapis.com/css?family=PT Mono' rel='stylesheet'>
     <link href='https://fonts.googleapis.com/css?family=Vollkorn' rel='stylesheet'>
     <style type="text/css">
         html, body {  /* for full-height background */
@@ -37,10 +39,14 @@
 
         /* This lets us exactly match MathJax's tt font */
         @font-face {
-          font-family: "tex-tt";
-          src: url('texfonts/cmuntt.otf') format('opentype');
-          font-weight: normal;
-          font-style: normal;
+          font-family: 'tex-tt';
+          src: url('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/fonts/HTML-CSS/TeX/eot/MathJax_Typewriter-Regular.eot'); /* IE9 Compat Modes */
+          src: url('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/fonts/HTML-CSS/TeX/eot/MathJax_Typewriter-Regular?iefix') format('eot'),
+               url('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/fonts/HTML-CSS/TeX/woff/Typewriter-Regular.woff')  format('woff'),
+               url('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/fonts/HTML-CSS/TeX/otf/MathJax_Typewriter-Regular.otf')  format('opentype'),
+               url('https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/fonts/HTML-CSS/TeX/svg/MathJax_Typewriter-Regular.svg') format('svg');
+               font-weight: normal;
+               font-style: normal;
         }
 
         #content {
